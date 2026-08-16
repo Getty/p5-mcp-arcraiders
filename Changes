@@ -1,0 +1,7 @@
+Revision history for MCP-ArcRaiders
+
+{{$NEXT}}
+  - Initial release
+  - Tools: search_items, get_item_details, get_arcs, get_quests,
+    get_traders, find_item_seller, get_event_timers, get_active_events,
+    get_map_data, list_maps

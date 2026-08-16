@@ -1,0 +1,34 @@
+{
+  "data": [
+    {
+      "id": "a-bad-feeling",
+      "name": "A Bad Feeling",
+      "type": "SideQuest",
+      "description": "Find and search any ARC Probe or ARC Courier",
+      "objectives": ["Find and search any ARC Probe or ARC Courier"],
+      "requiredItems": [],
+      "rewards": [
+        {"item": "Metal Parts", "quantity": 1},
+        {"item": "Steel Spring", "quantity": 1}
+      ],
+      "xpReward": 100
+    },
+    {
+      "id": "first-steps",
+      "name": "First Steps",
+      "type": "StoryQuest",
+      "description": "Complete the tutorial missions",
+      "objectives": ["Talk to Apollo", "Craft your first item"],
+      "requiredItems": [],
+      "rewards": [
+        {"item": "Ferro I", "quantity": 1}
+      ],
+      "xpReward": 250
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "total": 2,
+    "hasNextPage": false
+  }
+}

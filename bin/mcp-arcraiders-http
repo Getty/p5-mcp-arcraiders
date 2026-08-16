@@ -1,0 +1,330 @@
+#!/usr/bin/env perl
+# PODNAME: mcp-arcraiders-http
+# ABSTRACT: HTTP MCP + REST server for ARC Raiders game data
+
+use strict;
+use warnings;
+use Mojolicious::Lite -signatures;
+BEGIN { push @INC, $ENV{METAFORGE_LIB} if $ENV{METAFORGE_LIB} }
+use MCP::ArcRaiders;
+
+my $mcp = MCP::ArcRaiders->new;
+my $api = $mcp->api;
+
+# MCP endpoint (for Claude)
+any '/mcp' => $mcp->server->to_action;
+
+# Info endpoint
+get '/' => sub ($c) {
+  $c->render(json => {
+    name    => 'ARC Raiders API',
+    version => $MCP::ArcRaiders::VERSION,
+    endpoints => {
+      mcp  => '/mcp (Claude MCP protocol)',
+      rest => {
+        items         => 'GET /api/items?search=&limit=',
+        item          => 'GET /api/items/:name',
+        arcs          => 'GET /api/arcs',
+        quests        => 'GET /api/quests?type=',
+        traders       => 'GET /api/traders',
+        events        => 'GET /api/events',
+        active_events => 'GET /api/events/active',
+        maps          => 'GET /api/maps',
+        map_data      => 'GET /api/maps/:map?category=&subcategory=&search=',
+        requirements  => 'POST /api/requirements',
+      },
+    },
+  });
+};
+
+# OpenAPI spec for ChatGPT
+get '/openapi.json' => sub ($c) {
+  my $base_url = $ENV{OPENAPI_SERVER_URL};
+  unless ($base_url) {
+    my $proto = $c->req->headers->header('X-Forwarded-Proto') // $c->req->url->base->scheme // 'http';
+    my $host = $c->req->headers->header('X-Forwarded-Host') // $c->req->url->base->host_port;
+    $base_url = "$proto://$host";
+  }
+  $base_url =~ s{/$}{};  # Remove trailing slash
+  $c->render(json => {
+    openapi => '3.1.0',
+    info => {
+      title       => 'ARC Raiders Game Data API',
+      description => 'API for ARC Raiders game data - items, quests, traders, events, maps',
+      version     => $MCP::ArcRaiders::VERSION,
+    },
+    servers => [{ url => $base_url }],
+    paths => {
+      '/api/items' => {
+        get => {
+          operationId => 'searchItems',
+          summary     => 'Search for items',
+          parameters  => [
+            { name => 'search', in => 'query', schema => { type => 'string' }, description => 'Search term' },
+            { name => 'limit', in => 'query', schema => { type => 'integer', default => 20 }, description => 'Max results' },
+          ],
+          responses => { 200 => { description => 'List of items' } },
+        },
+      },
+      '/api/items/{name}' => {
+        get => {
+          operationId => 'getItemDetails',
+          summary     => 'Get item details including crafting requirements',
+          parameters  => [
+            { name => 'name', in => 'path', required => \1, schema => { type => 'string' } },
+          ],
+          responses => { 200 => { description => 'Item details' } },
+        },
+      },
+      '/api/arcs' => {
+        get => {
+          operationId => 'getArcs',
+          summary     => 'Get ARC missions/events with loot',
+          responses   => { 200 => { description => 'List of ARCs' } },
+        },
+      },
+      '/api/quests' => {
+        get => {
+          operationId => 'getQuests',
+          summary     => 'Get quests',
+          parameters  => [
+            { name => 'type', in => 'query', schema => { type => 'string', enum => ['StoryQuest', 'SideQuest'] } },
+          ],
+          responses => { 200 => { description => 'List of quests' } },
+        },
+      },
+      '/api/traders' => {
+        get => {
+          operationId => 'getTraders',
+          summary     => 'Get traders and their inventory',
+          responses   => { 200 => { description => 'List of traders' } },
+        },
+      },
+      '/api/events' => {
+        get => {
+          operationId => 'getEventTimers',
+          summary     => 'Get event schedules',
+          responses   => { 200 => { description => 'List of events with times' } },
+        },
+      },
+      '/api/events/active' => {
+        get => {
+          operationId => 'getActiveEvents',
+          summary     => 'Get currently active events',
+          responses   => { 200 => { description => 'Active events' } },
+        },
+      },
+      '/api/maps' => {
+        get => {
+          operationId => 'listMaps',
+          summary     => 'List all maps',
+          responses   => { 200 => { description => 'List of maps' } },
+        },
+      },
+      '/api/maps/{map}' => {
+        get => {
+          operationId => 'getMapData',
+          summary     => 'Get map markers/POIs filtered by category',
+          parameters  => [
+            { name => 'map', in => 'path', required => \1, schema => { type => 'string', enum => [qw(dam spaceport buried-city blue-gate stella-montis)] } },
+            { name => 'category', in => 'query', required => \1, schema => { type => 'string', enum => [qw(arc containers locations events)] }, description => 'Category filter (required)' },
+            { name => 'subcategory', in => 'query', schema => { type => 'string' }, description => 'Subcategory filter (e.g., tick, extraction)' },
+            { name => 'search', in => 'query', schema => { type => 'string' }, description => 'Search term for marker names' },
+          ],
+          responses => { 200 => { description => 'Map markers' } },
+        },
+      },
+      '/api/requirements' => {
+        post => {
+          operationId  => 'calculateRequirements',
+          summary      => 'Calculate crafting requirements for items',
+          requestBody  => {
+            required => \1,
+            content  => {
+              'application/json' => {
+                schema => {
+                  type => 'object',
+                  properties => {
+                    items     => { type => 'array', items => { type => 'object', properties => { item => { type => 'string' }, count => { type => 'integer' } } } },
+                    base_only => { type => 'boolean', description => 'Resolve to raw materials only' },
+                  },
+                },
+              },
+            },
+          },
+          responses => { 200 => { description => 'Required materials' } },
+        },
+      },
+    },
+  });
+};
+
+#
+# REST API endpoints
+#
+
+get '/api/items' => sub ($c) {
+  my %params;
+  for my $key (qw(search limit id includeComponents)) {
+    my $val = $c->param($key);
+    $params{$key} = $val if defined $val;
+  }
+  $params{limit} //= 20;
+
+  my $items = $api->items(%params);
+  my $detailed = $params{includeComponents};
+  $c->render(json => [ map { $detailed ? _item_detail($_) : _item_hash($_) } @$items ]);
+};
+
+get '/api/items/:name' => sub ($c) {
+  my $name = $c->param('name');
+  my $items = $api->items(search => $name, limit => 5);
+
+  return $c->render(json => { error => 'Not found' }, status => 404) unless @$items;
+
+  $c->render(json => [ map { _item_detail($_) } @$items ]);
+};
+
+get '/api/arcs' => sub ($c) {
+  my $arcs = $api->arcs(includeLoot => 'true');
+  $c->render(json => [ map { _arc_hash($_) } @$arcs ]);
+};
+
+get '/api/quests' => sub ($c) {
+  my %params;
+  $params{type} = $c->param('type') if $c->param('type');
+
+  my $quests = $api->quests(%params);
+  $c->render(json => [ map { _quest_hash($_) } @$quests ]);
+};
+
+get '/api/traders' => sub ($c) {
+  my $traders = $api->traders;
+  $c->render(json => [ map { _trader_hash($_) } @$traders ]);
+};
+
+get '/api/events' => sub ($c) {
+  my $events = $api->event_timers_hourly;
+  $c->render(json => [ map { _event_hash($_) } @$events ]);
+};
+
+get '/api/events/active' => sub ($c) {
+  my $events = $api->event_timers_hourly;
+  my @active = grep { $_->is_active_now } @$events;
+  $c->render(json => [ map { _event_hash($_) } @active ]);
+};
+
+get '/api/maps' => sub ($c) {
+  my %names = $api->map_display_names;
+  $c->render(json => [ map { { id => $_, name => $names{$_} } } $api->maps ]);
+};
+
+get '/api/maps/:map' => sub ($c) {
+  my $map = $c->param('map');
+  my $category = $c->param('category');
+  my $subcategory = $c->param('subcategory');
+  my $search = $c->param('search');
+
+  return $c->render(json => { error => 'category parameter is required' }, status => 400) unless $category;
+
+  my $markers = $api->map_data(map => $map);
+
+  return $c->render(json => { error => 'Not found' }, status => 404) unless $markers && @$markers;
+
+  # Filter by category (required)
+  my @filtered = grep { $_->category eq $category } @$markers;
+
+  # Filter by subcategory (optional)
+  if ($subcategory) {
+    @filtered = grep { $_->subcategory && $_->subcategory eq $subcategory } @filtered;
+  }
+
+  # Filter by search term (optional, case-insensitive)
+  if ($search) {
+    my $term = lc($search);
+    @filtered = grep {
+      (defined $_->name && index(lc($_->name), $term) >= 0) ||
+      (defined $_->description && index(lc($_->description), $term) >= 0)
+    } @filtered;
+  }
+
+  return $c->render(json => { error => 'No markers found matching criteria' }, status => 404) unless @filtered;
+
+  $c->render(json => [ map {
+    { name => $_->name, type => $_->type, category => $_->category, subcategory => $_->subcategory, description => $_->description, x => $_->x, y => $_->y }
+  } @filtered ]);
+};
+
+post '/api/requirements' => sub ($c) {
+  my $data = $c->req->json // {};
+  my $items = $data->{items} // [];
+  my $base_only = $data->{base_only} // 0;
+
+  my $result;
+  if ($base_only) {
+    $result = $api->calculate_base_requirements(items => $items);
+  } else {
+    $result = $api->calculate_requirements(items => $items);
+  }
+
+  my @requirements = map {
+    { item => $_->{item}->name, id => $_->{item}->id, count => $_->{count}, category => $_->{item}->category, rarity => $_->{item}->rarity }
+  } @{$result->{requirements}};
+
+  $c->render(json => { requirements => \@requirements, missing => $result->{missing} });
+};
+
+# Helper functions
+sub _item_hash ($item) {
+  return {
+    id => $item->id, name => $item->name, category => $item->category,
+    rarity => $item->rarity, description => $item->description,
+    weight => $item->weight, base_value => $item->base_value,
+  };
+}
+
+sub _item_detail ($item) {
+  return {
+    id => $item->id, name => $item->name, category => $item->category,
+    rarity => $item->rarity, description => $item->description,
+    weight => $item->weight, stack_size => $item->stack_size, base_value => $item->base_value,
+    stats => $item->stats, crafting_requirements => $item->crafting_requirements,
+    sold_by => $item->sold_by, used_in => $item->used_in,
+  };
+}
+
+sub _arc_hash ($arc) {
+  return {
+    id => $arc->id, name => $arc->name, type => $arc->type,
+    description => $arc->description, maps => $arc->maps,
+    duration => $arc->duration, cooldown => $arc->cooldown,
+    loot => $arc->loot, xp_reward => $arc->xp_reward, coin_reward => $arc->coin_reward,
+  };
+}
+
+sub _quest_hash ($quest) {
+  return {
+    id => $quest->id, name => $quest->name, type => $quest->type,
+    description => $quest->description, objectives => $quest->objectives,
+    required_items => $quest->required_items, rewards => $quest->rewards,
+    xp_reward => $quest->xp_reward,
+  };
+}
+
+sub _trader_hash ($trader) {
+  return {
+    name => $trader->name, description => $trader->description,
+    location => $trader->location, inventory => $trader->inventory,
+  };
+}
+
+sub _event_hash ($event) {
+  return {
+    name => $event->name, map => $event->map, description => $event->description,
+    times => $event->times, days => $event->days,
+    is_active_now => $event->is_active_now ? \1 : \0,
+    time_until_start => $event->time_until_start, time_until_end => $event->time_until_end,
+  };
+}
+
+app->start;

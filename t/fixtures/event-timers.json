@@ -1,0 +1,29 @@
+{
+  "data": [
+    {
+      "game": "arc-raiders",
+      "name": "Cold Snap",
+      "map": "Dam",
+      "icon": "https://cdn.metaforge.app/arc-raiders/custom/coldsnap.webp",
+      "description": "Freezing weather event with special loot.",
+      "days": [],
+      "times": [
+        {"start": "04:00", "end": "06:00"},
+        {"start": "12:00", "end": "14:00"},
+        {"start": "20:00", "end": "22:00"}
+      ]
+    },
+    {
+      "game": "arc-raiders",
+      "name": "Harvester",
+      "map": "Blue Gate",
+      "icon": "https://cdn.metaforge.app/arc-raiders/custom/harvester.webp",
+      "description": "ARC harvesting operation.",
+      "days": [],
+      "times": [
+        {"start": "11:00", "end": "12:00"},
+        {"start": "20:00", "end": "21:00"}
+      ]
+    }
+  ]
+}

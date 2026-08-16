@@ -1,0 +1,37 @@
+#!/usr/bin/env perl
+# PODNAME: mcp-arcraiders
+# ABSTRACT: MCP server for ARC Raiders game data
+
+use strict;
+use warnings;
+use MCP::ArcRaiders;
+
+MCP::ArcRaiders->run_stdio;
+
+__END__
+
+=head1 SYNOPSIS
+
+  # Run as stdio MCP server
+  mcp-arcraiders
+
+  # Configure in Claude Desktop settings:
+  # {
+  #   "mcpServers": {
+  #     "arcraiders": {
+  #       "command": "mcp-arcraiders"
+  #     }
+  #   }
+  # }
+
+=head1 DESCRIPTION
+
+Runs an MCP server over stdio that provides ARC Raiders game data
+to AI assistants. Exposes tools for searching items, getting event
+timers, finding traders, and more.
+
+=head1 SEE ALSO
+
+L<MCP::ArcRaiders>
+
+=cut

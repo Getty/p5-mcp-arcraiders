@@ -1,0 +1,39 @@
+{
+  "data": [
+    {
+      "id": "arc-courier",
+      "name": "ARC Courier",
+      "type": "MinorEvent",
+      "description": "A small ARC drone carrying valuable resources.",
+      "maps": ["Dam", "Spaceport", "Blue Gate"],
+      "duration": 300,
+      "cooldown": 1800,
+      "loot": [
+        {"item": "Metal Parts", "chance": 0.8},
+        {"item": "Basic Circuit", "chance": 0.3}
+      ],
+      "xpReward": 50
+    },
+    {
+      "id": "arc-harvester",
+      "name": "ARC Harvester",
+      "type": "MajorEvent",
+      "description": "Large ARC harvesting operation with heavy defenses.",
+      "maps": ["Blue Gate"],
+      "duration": 900,
+      "cooldown": 3600,
+      "loot": [
+        {"item": "Advanced Circuit", "chance": 0.5},
+        {"item": "Metal Parts", "chance": 1.0},
+        {"item": "Steel Spring", "chance": 0.7}
+      ],
+      "xpReward": 200,
+      "coinReward": 500
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "total": 2,
+    "hasNextPage": false
+  }
+}

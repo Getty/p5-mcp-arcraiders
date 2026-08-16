@@ -1,0 +1,26 @@
+services:
+  arcraiders-api:
+    build: .
+    volumes:
+      # Adjust path to your WWW::MetaForge installation
+      - /path/to/p5-www-metaforge/lib:/app/metaforge-lib:ro
+      - ./.cache:/app/.cache
+    environment:
+      - PERL5LIB=/app/lib:/app/metaforge-lib
+      - METAFORGE_LIB=/app/metaforge-lib
+    command: ["perl", "bin/mcp-arcraiders-http", "daemon", "-l", "http://*:3939"]
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.arcraiders.loadbalancer.server.port=3939"
+      - "traefik.http.services.arcraiders.loadbalancer.server.scheme=http"
+      - "traefik.http.middlewares.arcraiders-redirectscheme.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.arcraiders-redirectscheme.redirectscheme.permanent=true"
+      - "traefik.http.routers.arcraiders-http.rule=Host(`arc.hq.srv.ci`)"
+      - "traefik.http.routers.arcraiders-http.entryPoints=http"
+      - "traefik.http.routers.arcraiders-http.middlewares=arcraiders-redirectscheme"
+      - "traefik.http.routers.arcraiders-https.rule=Host(`arc.hq.srv.ci`)"
+      - "traefik.http.routers.arcraiders-https.entryPoints=https"
+      - "traefik.http.routers.arcraiders-https.tls=true"
+      - "traefik.http.routers.arcraiders-https.tls.certresolver=${TRAEFIK_CERTRESOLVER:-ledme}"
+      - "traefik.http.routers.arcraiders-https.service=arcraiders"

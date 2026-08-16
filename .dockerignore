@@ -1,0 +1,11 @@
+.git
+*.tar.gz
+*.bak
+local/
+.build/
+t/
+Dockerfile
+docker-compose.yml
+docker-compose.example.yml
+.dockerignore
+.cache/
