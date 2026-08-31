@@ -8,6 +8,8 @@
 !.claude/settings.local.json
 !.claude/agents/
 !.claude/agents/**
+!.claude/rules/
+!.claude/rules/**
 !.claude/skills/
 !.claude/skills/**
 !.claude/hooks/
@@ -40,3 +42,7 @@ docker-compose.yml
 .cache/
 /.cache/
 # Claude state
+
+# karr materialized task view -- never commit
+tasks/
+config.yml

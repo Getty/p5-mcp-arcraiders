@@ -1,0 +1,7 @@
+claude: true
+prompt: >-
+  Drain the MCP-ArcRaiders board. Pick the highest-priority actionable ticket,
+  delegate behavior-relevant work to the mcp-arcraiders-worker agent, verify with
+  `prove -lr t/`, and hand off to review. Follow .claude/rules/mcp-arcraiders-rules.md.
+  Never run `dzil release`. Upstream data gaps go to p5-www-metaforge as tickets,
+  never patched here.
