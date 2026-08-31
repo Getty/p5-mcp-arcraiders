@@ -1,0 +1,13 @@
+---
+class: standard
+created: 2026-08-31T04:36:11Z
+id: 2
+priority: medium
+status: backlog
+tags:
+- tests
+title: 'Test coverage gap: find_item_seller, get_active_events, get_map_data'
+updated: 2026-08-31T04:36:11Z
+---
+
+t/api.t exercises 8 tools but has no subtest for find_item_seller, get_active_events, or get_map_data. Fixtures already exist (incl. t/fixtures/map-data.json, mapped by MockUA via game-map-data). Add subtests driving each tool->code sub against the mocked API.
