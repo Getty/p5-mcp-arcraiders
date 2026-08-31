@@ -1,0 +1,13 @@
+---
+class: standard
+created: 2026-08-31T04:36:15Z
+id: 3
+priority: low
+status: backlog
+tags:
+- surface-sync
+title: REST /api/items exposes params absent from MCP search_items
+updated: 2026-08-31T04:36:15Z
+---
+
+GET /api/items accepts id and includeComponents (bin/mcp-arcraiders-http) but the MCP search_items tool (lib/MCP/ArcRaiders.pm) only exposes search + limit. Reconcile the two surfaces: either expose the extra params in the MCP tool or drop them from REST, per the three-surface invariant.
