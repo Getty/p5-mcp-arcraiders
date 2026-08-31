@@ -1,0 +1,13 @@
+---
+class: standard
+created: 2026-08-31T04:35:59Z
+id: 1
+priority: high
+status: backlog
+tags:
+- surface-sync
+title: find_item_seller missing from REST + OpenAPI surface
+updated: 2026-08-31T04:35:59Z
+---
+
+find_item_seller is registered as an MCP tool in lib/MCP/ArcRaiders.pm but has no /api route and no operationId in /openapi.json (bin/mcp-arcraiders-http). ChatGPT/REST clients cannot reach it. Decide: add the REST route + OpenAPI path to match, or document it as intentionally MCP-only.
