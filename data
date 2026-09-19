@@ -1,0 +1,23 @@
+---
+class: standard
+created: 2026-09-19T03:53:06Z
+id: 4
+priority: low
+status: backlog
+tags:
+- cross-repo
+- api-change
+- upstream
+title: WWW::MetaForge::ArcRaiders::Result::Item gained 4 attributes (additive, not
+  breaking)
+updated: 2026-09-19T03:53:06Z
+---
+
+Cross-repo handoff from p5-www-metaforge karr #6. WWW::MetaForge::ArcRaiders::Result::Item (which this repo uses directly via WWW::MetaForge::ArcRaiders / WWW::MetaForge::Cache) gained four new read-only attributes, all populated straight from the live /api/arc-raiders/items response (fetch with includeComponents=true to get non-empty components/recycle_components):
+
+- components: ArrayRef of { quantity, component } -- crafting materials (component is a hash {id,icon,name,rarity,item_type} or a bare string)
+- recycle_components: ArrayRef, same shape as components -- recycling yield
+- sold_by: ArrayRef of { price, trader_name } -- traders selling the item
+- updated_at: Maybe[Str] timestamp
+
+Nothing was removed or renamed on Result::Item; existing accessors (id, name, description, item_type, loadout_slots, icon, rarity, value, workbench, stat_block, weight, stack_size) are unchanged, so this should not break anything here. Flagging per the p5-www-metaforge house rule that any Result::Item change needs a cross-repo note for this board. Possibly relevant context for #1 (find_item_seller) since sold_by is now a real, populated field on the upstream Item.
