@@ -30,14 +30,14 @@ This rule depends on whether the Agent/Task tool is available to you.
 
 - **You can spawn subagents** (orchestrating main agent): Do NOT touch
   behavior-relevant code yourself — delegate to `mcp-arcraiders-worker`. Your
-  lane: coordinate, inspect, plan, review diffs, run tests, manage git, edit
+  lane: coordinate, inspect, plan, review diffs, run tests, edit
   non-behavioral docs. Only the `mcp-arcraiders-*` agents get their skills
   force-loaded via `briefing.skills`; you get no briefing.
 
   | Task | Agent |
   |---|---|
   | Implement / refactor / debug behavior-relevant code | `mcp-arcraiders-worker` (default) |
-  | Pre-release audit | `mcp-arcraiders-release-checker` |
+  | Commits, `Changes`, card → done, pre-release audit | `mcp-arcraiders-release-manager` |
 
 - **You cannot spawn subagents** (you ARE a `mcp-arcraiders-*` agent): The
   delegation lock does not apply — implement, refactor, debug, and test per
@@ -47,10 +47,13 @@ Behavior-relevant = MCP tools, REST/OpenAPI routes, the `_*_to_hash` shapers,
 the cache namespace, error handling, and tests. Pure prose docs and `Changes`
 notes are not.
 
+**Only `mcp-arcraiders-release-manager` commits.** A worker leaves a commit-ready tree and hands its card
+to `review`; you then dispatch `mcp-arcraiders-release-manager` to cut the commit and close the card.
+
 ## Coordination — karr board (always in scope)
 
 Ticket coordination is the orchestrating agent's job, so `karr` is always in
-scope — just use it (skill `kanban-issues-karr-cli` for the full surface).
+scope — just use it (skill `kanban-issues-karr-coordination` for the full surface).
 Git-native kanban; state lives in `refs/karr/*`; this repo has its own board.
 
 - `karr list --compact` / `karr board` — open work · `karr show ID` — detail
