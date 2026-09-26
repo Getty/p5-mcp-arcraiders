@@ -2,7 +2,6 @@
 name: mcp-arcraiders-worker
 description: "Default MCP-ArcRaiders worker — implement, refactor, debug, and test code in this distribution: MCP tools, REST/OpenAPI surface, the WWW::MetaForge data shaping, the two bin entrypoints. Pre-loaded with all project conventions and repo specifics. Does not release; files upstream data gaps as karr tickets against p5-www-metaforge. Leaves a commit-ready tree; never commits — commits belong to mcp-arcraiders-release-manager."
 model: inherit
-allowed-tools: Read, Edit, Write, Bash, Glob, Grep
 briefing:
   skills:
     - mcp-arcraiders-core

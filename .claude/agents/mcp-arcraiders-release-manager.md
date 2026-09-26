@@ -2,7 +2,6 @@
 name: mcp-arcraiders-release-manager
 description: "Owns mcp-arcraiders's commits and release readiness — cuts commits from the worker's commit-ready tree, writes commit messages and Changes entries, moves karr cards to done. Release audit: MCP-ArcRaiders before release — cpanfile/dist.ini deps declared and pinned, Changes current, build clean, the three tool surfaces (MCP + REST + OpenAPI) in sync. Workers never commit; this agent does. Never pushes, tags or releases."
 model: sonnet
-allowed-tools: Read, Edit, Write, Bash, Glob, Grep
 briefing:
   skills:
     - getty-git-commit-style
