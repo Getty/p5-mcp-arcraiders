@@ -5,3 +5,7 @@ Revision history for MCP-ArcRaiders
   - Tools: search_items, get_item_details, get_arcs, get_quests,
     get_traders, find_item_seller, get_event_timers, get_active_events,
     get_map_data, list_maps
+  - The release builds, tags (latest, <major>, <version>) and pushes the
+    raudssus/mcp-arcraiders Docker image through the bundle's
+    Dist::Zilla::Plugin::Docker::API (docker_image in dist.ini). Every dzil
+    build or dzil test builds the image unless DZIL_DOCKER_API_SKIP=1 is set.

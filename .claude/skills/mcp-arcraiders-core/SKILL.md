@@ -93,6 +93,11 @@ without rebuilding. The cpanfile still declares `WWW::MetaForge >= 0.003` for
 CPAN/test installs — both facts are true and intentional; do not "fix" the
 apparent contradiction by adding it to the Docker install.
 
+The image is `raudssus/mcp-arcraiders`, built from the built dist by the bundle's
+`docker_image` (`Dist::Zilla::Plugin::Docker::API`) in every `dzil build` and pushed as
+`latest`, `<major>`, `<version>` on release; `DZIL_DOCKER_API_SKIP=1 dzil build` builds
+without a container engine.
+
 The compose example serves on port 3939 behind Traefik. The `.cache` dir is a
 mounted volume so the MetaForge cache survives restarts.
 

@@ -27,7 +27,9 @@ code goes back to the worker as a note on its card, not as your own fix. **Never
    deliberate tension: `WWW::MetaForge >= 0.003` is declared here but grepped
    *out* of the Docker install and bind-mounted at runtime. That is intentional
    (see `mcp-arcraiders-core`) — do not flag it as a missing Docker dependency.
-2. `dist.ini` — `[@Author::GETTY]` bundle; version strategy per that plugin.
+2. `dist.ini` — `[@Author::GETTY]` bundle; version strategy per that plugin. Docker image
+   and GitHub release come from the bundle only (`docker_image`, `docker_tags`,
+   `GitHub::CreateRelease`) — no `run_after_release` lines.
 3. `dzil build` / `prove -lr t/` — runs clean, no missing files, no warnings.
 4. `Changes` — a `{{$NEXT}}` section exists and covers user-visible changes
    since the last tag (`git log --oneline <last tag>..`).

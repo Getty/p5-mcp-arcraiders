@@ -19,8 +19,10 @@ RUN grep -v WWW::MetaForge cpanfile > cpanfile.docker && \
     cpanm --installdeps --notest --cpanfile cpanfile.docker . && \
     rm cpanfile.docker
 
-# Install WWW::MetaForge dependencies (module itself is mounted)
-RUN cpanm --notest Type::Tiny LWP::UserAgent MooX::Cmd LWP::Protocol::https
+# Install WWW::MetaForge dependencies (module itself is mounted). Keep in step
+# with the requires of p5-www-metaforge's cpanfile.
+RUN cpanm --notest Type::Tiny DateTime LWP::UserAgent LWP::Protocol::https \
+    HTTP::Request Path::Tiny URI MooX::Cmd MooX::Options
 
 # Copy application
 COPY lib/ lib/
