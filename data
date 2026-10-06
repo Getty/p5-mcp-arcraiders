@@ -1,0 +1,27 @@
+---
+class: standard
+created: 2026-10-06T19:43:00Z
+id: 6
+priority: low
+status: backlog
+tags:
+- hygiene
+- cpanfile
+- review-2026-10-06
+title: 'cpanfile: Mojolicious is used directly by bin/mcp-arcraiders-http but not
+  declared'
+updated: 2026-10-06T19:43:00Z
+---
+
+## What is wrong
+
+`bin/mcp-arcraiders-http:7` does `use Mojolicious::Lite -signatures;` and runs the app with `app->start` (`:330`). `cpanfile` lists Moo, MCP, WWW::MetaForge, JSON::MaybeXS and namespace::clean, but not Mojolicious; it is only present because MCP happens to depend on it. The sibling MCP-Picnic declares it (`requires 'Mojolicious', '9.0'`).
+
+(The working tree has an uncommitted change to the WWW::MetaForge line of `cpanfile`; this finding is independent of it and concerns a line that is missing in both versions.)
+
+## Done
+
+`requires 'Mojolicious';` in `cpanfile` with the minimum version the script needs (signatures in Mojolicious::Lite).
+
+---
+Fleet review 2026-10-06 · kind: hygiene · confidence: verified
