@@ -1,0 +1,36 @@
+---
+class: standard
+created: 2026-10-06T19:42:55Z
+id: 5
+priority: medium
+status: backlog
+tags:
+- bug
+- encoding
+- utf8
+- review-2026-10-06
+title: Tool results are double UTF-8 encoded (utf8 => 1 encoder feeding MCP::Server
+  text results)
+updated: 2026-10-06T19:42:55Z
+---
+
+## What is wrong
+
+The encoder is built with `utf8 => 1` (`lib/MCP/ArcRaiders.pm:28`), so `_to_json` (`:47-50`) returns UTF-8 bytes. Every tool returns that string as its result (`:156`, `:199`, `:224`, `:249`, `:265`, `:299`), MCP::Server wraps it as a text block and its transports encode the response with Mojo::JSON, which expects characters. Non-ASCII text is therefore encoded twice.
+
+## Reproduce
+
+    my $a = MCP::ArcRaiders->new;
+    my $t = $a->json->encode({ name => "Raider\x{2019}s Caf\x{e9}" });
+    my $back = Mojo::JSON::decode_json(Mojo::JSON::encode_json({ text => $t }))->{text};
+    # client sees: { "name" : "Raiderâs CafÃ©" }
+
+Item and quest descriptions carry typographic apostrophes, dashes and accented names; all of them arrive garbled. `t/api.t:14` builds its own decoder with `utf8 => 0` and the fixtures are compared as Perl data, so the suite never sees the wire form. MCP::Picnic has the identical defect (reported there); fix both the same way.
+
+## Done
+
+- Encoder for tool results uses `utf8 => 0` (characters out); `bin/mcp-arcraiders-http` keeps rendering through Mojolicious' `json =>`.
+- A test sends a `tools/call` through the server's `handle` and the transport encoding with a fixture containing `’` and `é`, and asserts the client-side text.
+
+---
+Fleet review 2026-10-06 · kind: bug · confidence: verified
