@@ -1,0 +1,33 @@
+---
+class: standard
+created: 2026-10-06T19:53:25Z
+id: 7
+priority: high
+status: backlog
+tags:
+- bug
+- api
+- metaforge
+- review-2026-10-06
+title: '_item_to_hash calls category, base_value and stats, which WWW::MetaForge''s
+  Result::Item no longer has: every item tool dies'
+updated: 2026-10-06T19:53:25Z
+---
+
+Against the local `~/dev/p5-www-metaforge` (commits `ab47840` "align with live API - use item_type, value, stat_block" and `5a8b2b3`, karr k6 there) the item tools die:
+
+    PERL5LIB=../p5-www-metaforge/lib prove -l t/api.t
+    Can't locate object method "category" via package "WWW::MetaForge::ArcRaiders::Result::Item" at lib/MCP/ArcRaiders.pm line 55.
+    t/api.t (Wstat: 65280 (exited 255) Tests: 4 Failed: 0)
+
+`lib/MCP/ArcRaiders.pm:52-64` (`_item_to_hash`) reads `category`, `base_value` and `stats`. `Result::Item` now has `item_type`, `value` and `stat_block` instead:
+
+    perl -I../p5-www-metaforge/lib -MWWW::MetaForge::ArcRaiders::Result::Item -e 'print WWW::MetaForge::ArcRaiders::Result::Item->can($_)?"yes":"NO"," $_\n" for qw(category base_value stats item_type value stat_block)'
+    NO category / NO base_value / NO stats / yes item_type / yes value / yes stat_block
+
+k4 ("Result::Item gained 4 attributes (additive, not breaking)") starts from the wrong premise: the change renamed three attributes this dist uses, so it is breaking. The suite only looks green against an older installed WWW::MetaForge.
+
+Done: `_item_to_hash` reads the current attributes (decide whether the tool output keeps the old key names `category`/`base_value`/`stats` for clients or moves to the new ones, and say so in Changes), the cpanfile floor for WWW::MetaForge is the version that has them, `t/api.t` is green against the local sibling, and k4 is corrected or closed.
+
+---
+Fleet review 2026-10-06 · kind: bug · confidence: verified
