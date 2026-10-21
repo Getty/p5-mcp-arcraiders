@@ -43,9 +43,8 @@ This rule depends on whether the Agent/Task tool is available to you.
   delegation lock does not apply — implement, refactor, debug, and test per
   these rules.
 
-Behavior-relevant = MCP tools, REST/OpenAPI routes, the `_*_to_hash` shapers,
-the cache namespace, error handling, and tests. Pure prose docs and `Changes`
-notes are not.
+Behavior-relevant = MCP tools, REST/OpenAPI routes, the `_*_to_hash` shapers, the cache
+namespace, error handling, and tests. Pure prose docs and `Changes` notes are not.
 
 **Only `mcp-arcraiders-release-manager` commits.** A worker leaves a commit-ready tree and hands its card
 to `review`; you then dispatch `mcp-arcraiders-release-manager` to cut the commit and close the card.
@@ -64,21 +63,17 @@ Git-native kanban; state lives in `refs/karr/*`; this repo has its own board.
 you like, but loop `karr move`/`handoff`/`sync` sequentially — N landing at once
 is a resource event, not a cheap command.
 
-## Upstream coupling — p5-www-metaforge (ZWILLING)
+## Hazards
 
-All game data and the object model live in `WWW::MetaForge` (`p5-www-metaforge`,
-`>= 0.003`), the twin repo. A missing field, wrong shape, or needed API method
-is a **karr ticket filed against p5-www-metaforge** — never a workaround here,
-and never a direct edit of the neighbor repo. This repo only registers tools and
-shapes upstream objects into JSON.
-
-## The three-surface trap
-
-Every tool lives in three hand-maintained places that do not generate from each
-other: the MCP tool (`lib/MCP/ArcRaiders.pm`), the REST route, and the
-`/openapi.json` path (both in `bin/mcp-arcraiders-http`). A change that lands in
-only one silently diverges the ChatGPT/REST surface from MCP. Touch one → grep
-the others for the same operation and update them together.
+- **Three surfaces per tool** — the MCP tool (`lib/MCP/ArcRaiders.pm`), the REST route
+  and the `/openapi.json` path (both in `bin/mcp-arcraiders-http`) do not generate from
+  each other; a change in only one silently diverges the ChatGPT/REST surface from MCP.
+  Touch one → grep the others for the same operation and update them together.
+- **Upstream owns the data** (`p5-www-metaforge`, ZWILLING) — game data and the object
+  model live in `WWW::MetaForge` (`>= 0.003`), the twin repo. A missing field, wrong shape,
+  or needed API method is a **karr ticket filed against `p5-www-metaforge`** — never a
+  workaround here, and never a direct edit of the neighbor repo. This repo only registers
+  tools and shapes upstream objects into JSON. Detail: skill `mcp-arcraiders-core`.
 
 ## Release — never without permission
 
@@ -90,6 +85,5 @@ if a plan lists "release" as the next step. Stop and ask.
 
 Moo class patterns live in skill `getty-perl-moo`; MCP::Server mechanics in
 `perl-mcp`; dist.ini/release conventions in `perl-release-dist-ini` and
-`getty-perl-release-author-getty`; this distribution's architecture in
-`mcp-arcraiders-core` (all force-loaded for `mcp-arcraiders-*` agents). Do not
-duplicate that content here.
+`getty-perl-release-author-getty`; architecture in `mcp-arcraiders-core` (all
+force-loaded for `mcp-arcraiders-*` agents). Do not duplicate that content here.
