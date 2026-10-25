@@ -1,74 +1,48 @@
 # MCP-ArcRaiders House Rules
 
-Apply to every task in this repository unless explicitly overridden. Bias: caution over speed on non-trivial work; use judgment on trivial tasks.
-Loaded automatically at launch (same priority as `CLAUDE.md`). Subagents get their discipline from the skills force-loaded via `briefing.skills` —
-this file is for the orchestrating agent.
+The shared house rules come from skilletor — bundle `getty-cpan-dist@getty`: engineering
+discipline, the delegation lock, the publish gate, karr coordination, CPAN release. They load
+as `.claude/rules/.local.*.md`; if they are missing, run `skilletor sync` and publish nothing
+until they load. This file adds what is true only here, and wins where it differs.
 
-## Engineering discipline
+## What this repo is
 
-1. **Think before coding** — State assumptions. When uncertain, ask rather than guess. Push back when a simpler approach exists. Stop when confused;
-   name what's unclear.
-2. **Simplicity first** — Minimum code that solves the problem. No abstractions for single-use code.
-3. **Surgical changes** — Touch only what you must. Don't "improve" adjacent code or formatting. Match existing style.
-4. **Read before you write** — Before new code, read the tool's registration in `lib/MCP/ArcRaiders.pm`, its REST/OpenAPI twin in
-   `bin/mcp-arcraiders-http`, and the `_*_to_hash` shapers.
-5. **Fail loud** — "Done" is wrong if anything was skipped silently. "Tests pass" is wrong if any were skipped. Surface uncertainty, don't hide it.
-6. **A red test is a claim before a failure** — Say what a test asserts before changing code to make it green; don't satisfy an assertion by deleting
-   the property it samples.
+MCP server providing ARC Raiders game data for AI assistants. Read first: the tool's
+registration in `lib/MCP/ArcRaiders.pm`, its REST/OpenAPI twin in `bin/mcp-arcraiders-http`, and
+the `_*_to_hash` shapers.
 
-## Delegation
+## Agent team
 
-This rule depends on whether the Agent/Task tool is available to you.
+| Task | Agent |
+|---|---|
+| Implement / refactor / debug behavior-relevant code | `mcp-arcraiders-worker` (default) |
+| Commits, `Changes`, card → done, pre-release audit | `mcp-arcraiders-release-manager` |
+| Read-only research, audit, gap analysis | `mcp-arcraiders-worker` ("read-only, change nothing") |
 
-- **You can spawn subagents** (orchestrating main agent): Do NOT touch behavior-relevant code yourself — delegate to `mcp-arcraiders-worker`. Your
-  lane: coordinate, inspect, plan, review diffs, run tests, edit non-behavioral docs. Only the `mcp-arcraiders-*` agents get their skills force-loaded
-  via `briefing.skills`; you get no briefing.
+Behavior-relevant = MCP tools, REST/OpenAPI routes, the `_*_to_hash` shapers, the cache
+namespace, error handling, and tests. Pure prose docs and `Changes` notes are not.
 
-  | Task | Agent |
-  |---|---|
-  | Implement / refactor / debug behavior-relevant code | `mcp-arcraiders-worker` (default) |
-  | Commits, `Changes`, card → done, pre-release audit | `mcp-arcraiders-release-manager` |
+## Release
 
-- **You cannot spawn subagents** (you ARE a `mcp-arcraiders-*` agent): The delegation lock does not apply — implement, refactor, debug, and test per
-  these rules.
+The release also builds, tags and pushes the Docker image `raudssus/mcp-arcraiders` (`dist.ini`
+`docker_image`) — the publish gate covers it as part of the release, and any deploy.
+`DZIL_DOCKER_API_SKIP=1` keeps `dzil build`/`dzil test` off the container engine.
 
-Behavior-relevant = MCP tools, REST/OpenAPI routes, the `_*_to_hash` shapers, the cache namespace, error handling, and tests. Pure prose docs and
-`Changes` notes are not.
+## Deviations from the house rules
 
-**Only `mcp-arcraiders-release-manager` commits.** A worker leaves a commit-ready tree and hands its card to `review`; you then dispatch
-`mcp-arcraiders-release-manager` to cut the commit and close the card.
-
-## Coordination — karr board (always in scope)
-
-Ticket coordination is the orchestrating agent's job, so `karr` is always in scope — just use it (skill `kanban-issues-karr-coordination` for the full
-surface). Git-native kanban; state lives in `refs/karr/*`; this repo has its own board.
-
-- `karr list --compact` / `karr board` — open work · `karr show ID` — detail · `karr create "Title" --priority high --body '…'` — new ticket
-- `karr move ID in-progress --claim NAME` — start · `karr handoff ID --claim NAME --note "…"` — to review
-
-**Serialize board mutations when fanning out.** Keep implementation parallel if you like, but loop `karr move`/`handoff`/`sync` sequentially — N
-landing at once is a resource event, not a cheap command.
+- **CPAN RT counts as a public tracker** alongside GitHub issues on `Getty/p5-mcp-arcraiders`.
 
 ## Hazards — the background is in skill `mcp-arcraiders-core`
 
-- **Three surfaces per tool** — the MCP tool, the REST route and the `/openapi.json` path do not generate from each other. Change one → grep the
-  others for the same operation and update them together, or the surfaces silently diverge.
-- **Upstream owns the data** (`p5-www-metaforge`, ZWILLING) — a missing field, a wrong shape or a needed API method is a **karr ticket against
-  `p5-www-metaforge`**, never a workaround here and never a direct edit of the neighbor repo.
-
-## Release — never without permission
-
-`dzil build` / `prove -lr t/` are fine anytime. `dzil release` and any upload or deploy are STRICTLY forbidden without the maintainer's explicit
-go-ahead — even if a plan lists "release" as the next step. Stop and ask.
-
-## Public issues — never act without instruction
-
-**karr** is the internal AI/agent work board (churned freely). **GitHub issues on `Getty/p5-mcp-arcraiders`** and CPAN RT are the public tracker: real
-humans' reports, written under the maintainer's name. **Never act on a public issue on your own initiative — not even to read it.** No listing,
-viewing, commenting, editing, closing or creating unless the user explicitly names a specific public item.
+- **Three surfaces per tool** — the MCP tool, the REST route and the `/openapi.json` path do not
+  generate from each other. Change one → grep the others for the same operation and update them
+  together, or the surfaces silently diverge.
+- **Upstream owns the data** (`p5-www-metaforge`, ZWILLING) — a missing field, a wrong shape or a
+  needed API method is a **karr ticket against `p5-www-metaforge`**, never a workaround here and
+  never a direct edit of the neighbor repo.
 
 ## Perl / MCP specifics — reference, don't restate
 
-Moo class patterns live in skill `getty-perl-moo`; MCP::Server mechanics in `perl-mcp`; dist.ini/release conventions in `perl-release-dist-ini` and
-`getty-perl-release-author-getty`; architecture in `mcp-arcraiders-core` (all force-loaded for `mcp-arcraiders-*` agents). Do not duplicate that
-content here.
+Moo class patterns live in skill `getty-perl-moo`; MCP::Server mechanics in `perl-mcp`;
+dist.ini/release conventions in `perl-release-dist-ini` and `getty-perl-release-author-getty`;
+architecture in `mcp-arcraiders-core` (all force-loaded for `mcp-arcraiders-*` agents).
