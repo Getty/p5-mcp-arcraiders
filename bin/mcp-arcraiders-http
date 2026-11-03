@@ -69,7 +69,7 @@ get '/openapi.json' => sub ($c) {
       '/api/items/{name}' => {
         get => {
           operationId => 'getItemDetails',
-          summary     => 'Get item details including crafting requirements',
+          summary     => 'Get item details including crafting components, recycle yield, sellers and usage',
           parameters  => [
             { name => 'name', in => 'path', required => \1, schema => { type => 'string' } },
           ],
@@ -79,7 +79,7 @@ get '/openapi.json' => sub ($c) {
       '/api/arcs' => {
         get => {
           operationId => 'getArcs',
-          summary     => 'Get ARC missions/events with loot',
+          summary     => 'Get ARCs with their loot drops',
           responses   => { 200 => { description => 'List of ARCs' } },
         },
       },
@@ -126,10 +126,10 @@ get '/openapi.json' => sub ($c) {
           operationId => 'getMapData',
           summary     => 'Get map markers/POIs filtered by category',
           parameters  => [
-            { name => 'map', in => 'path', required => \1, schema => { type => 'string', enum => [qw(dam spaceport buried-city blue-gate stella-montis)] } },
+            { name => 'map', in => 'path', required => \1, schema => { type => 'string', enum => [qw(dam spaceport buried-city blue-gate riven-tides stella-montis)] } },
             { name => 'category', in => 'query', required => \1, schema => { type => 'string', enum => [qw(arc containers locations events)] }, description => 'Category filter (required)' },
             { name => 'subcategory', in => 'query', schema => { type => 'string' }, description => 'Subcategory filter (e.g., tick, extraction)' },
-            { name => 'search', in => 'query', schema => { type => 'string' }, description => 'Search term for marker names' },
+            { name => 'search', in => 'query', schema => { type => 'string' }, description => 'Search term for marker names and subcategories' },
           ],
           responses => { 200 => { description => 'Map markers' } },
         },
@@ -178,7 +178,7 @@ get '/api/items' => sub ($c) {
 
 get '/api/items/:name' => sub ($c) {
   my $name = $c->param('name');
-  my $items = $api->items(search => $name, limit => 5);
+  my $items = $api->items(search => $name, limit => 5, includeComponents => 'true');
 
   return $c->render(json => { error => 'Not found' }, status => 404) unless @$items;
 
@@ -244,15 +244,13 @@ get '/api/maps/:map' => sub ($c) {
     my $term = lc($search);
     @filtered = grep {
       (defined $_->name && index(lc($_->name), $term) >= 0) ||
-      (defined $_->description && index(lc($_->description), $term) >= 0)
+      (defined $_->subcategory && index(lc($_->subcategory), $term) >= 0)
     } @filtered;
   }
 
   return $c->render(json => { error => 'No markers found matching criteria' }, status => 404) unless @filtered;
 
-  $c->render(json => [ map {
-    { name => $_->name, type => $_->type, category => $_->category, subcategory => $_->subcategory, description => $_->description, x => $_->x, y => $_->y }
-  } @filtered ]);
+  $c->render(json => [ map { _marker_hash($_) } @filtered ]);
 };
 
 post '/api/requirements' => sub ($c) {
@@ -268,7 +266,7 @@ post '/api/requirements' => sub ($c) {
   }
 
   my @requirements = map {
-    { item => $_->{item}->name, id => $_->{item}->id, count => $_->{count}, category => $_->{item}->category, rarity => $_->{item}->rarity }
+    { item => $_->{item}->name, id => $_->{item}->id, count => $_->{count}, item_type => $_->{item}->item_type, rarity => $_->{item}->rarity }
   } @{$result->{requirements}};
 
   $c->render(json => { requirements => \@requirements, missing => $result->{missing} });
@@ -277,53 +275,59 @@ post '/api/requirements' => sub ($c) {
 # Helper functions
 sub _item_hash ($item) {
   return {
-    id => $item->id, name => $item->name, category => $item->category,
+    id => $item->id, name => $item->name, item_type => $item->item_type,
     rarity => $item->rarity, description => $item->description,
-    weight => $item->weight, base_value => $item->base_value,
+    weight => $item->weight, stack_size => $item->stack_size,
+    value => $item->value, stat_block => $item->stat_block,
   };
 }
 
 sub _item_detail ($item) {
   return {
-    id => $item->id, name => $item->name, category => $item->category,
-    rarity => $item->rarity, description => $item->description,
-    weight => $item->weight, stack_size => $item->stack_size, base_value => $item->base_value,
-    stats => $item->stats, crafting_requirements => $item->crafting_requirements,
-    sold_by => $item->sold_by, used_in => $item->used_in,
+    %{ _item_hash($item) },
+    workbench => $item->workbench, loadout_slots => $item->loadout_slots,
+    components => $item->components, recycle_components => $item->recycle_components,
+    sold_by => $item->sold_by,
+    used_in => [ map { { id => $_->{item}{id}, name => $_->{item}{name}, quantity => $_->{quantity} } } @{ $item->used_in } ],
   };
 }
 
 sub _arc_hash ($arc) {
   return {
-    id => $arc->id, name => $arc->name, type => $arc->type,
-    description => $arc->description, maps => $arc->maps,
-    duration => $arc->duration, cooldown => $arc->cooldown,
-    loot => $arc->loot, xp_reward => $arc->xp_reward, coin_reward => $arc->coin_reward,
+    id => $arc->id, name => $arc->name,
+    description => $arc->description, loot => $arc->loot,
   };
 }
 
 sub _quest_hash ($quest) {
   return {
-    id => $quest->id, name => $quest->name, type => $quest->type,
-    description => $quest->description, objectives => $quest->objectives,
-    required_items => $quest->required_items, rewards => $quest->rewards,
-    xp_reward => $quest->xp_reward,
+    id => $quest->id, name => $quest->name, trader_name => $quest->trader_name,
+    objectives => $quest->objectives, required_items => $quest->required_items,
+    rewards => $quest->rewards, granted_items => $quest->granted_items,
+    xp => $quest->xp, guide_url => $quest->guide_url,
   };
 }
 
 sub _trader_hash ($trader) {
-  return {
-    name => $trader->name, description => $trader->description,
-    location => $trader->location, inventory => $trader->inventory,
-  };
+  return { name => $trader->name, inventory => $trader->inventory };
 }
 
 sub _event_hash ($event) {
   return {
-    name => $event->name, map => $event->map, description => $event->description,
-    times => $event->times, days => $event->days,
+    name => $event->name, map => $event->map, icon => $event->icon,
+    times => [ map { { start => $_->start->iso8601 . 'Z', end => $_->end->iso8601 . 'Z' } } @{ $event->times } ],
     is_active_now => $event->is_active_now ? \1 : \0,
     time_until_start => $event->time_until_start, time_until_end => $event->time_until_end,
+  };
+}
+
+sub _marker_hash ($marker) {
+  return {
+    id => $marker->id, name => $marker->name, type => $marker->type,
+    category => $marker->category, subcategory => $marker->subcategory,
+    x => $marker->x, y => $marker->y, z => $marker->z,
+    loot_areas => $marker->lootAreas,
+    behind_locked_door => $marker->behindLockedDoor ? \1 : \0,
   };
 }
 

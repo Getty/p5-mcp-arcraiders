@@ -54,14 +54,32 @@ sub _item_to_hash {
   return {
     id          => $item->id,
     name        => $item->name,
-    category    => $item->category,
+    item_type   => $item->item_type,
     rarity      => $item->rarity,
     description => $item->description,
     weight      => $item->weight,
     stack_size  => $item->stack_size,
-    base_value  => $item->base_value,
-    stats       => $item->stats,
+    value       => $item->value,
+    stat_block  => $item->stat_block,
   };
+}
+
+sub _item_details_to_hash {
+  my ($self, $item) = @_;
+  return {
+    %{ $self->_item_to_hash($item) },
+    workbench          => $item->workbench,
+    loadout_slots      => $item->loadout_slots,
+    components         => $item->components,
+    recycle_components => $item->recycle_components,
+    sold_by            => $item->sold_by,
+    used_in            => $self->_used_in_to_list($item),
+  };
+}
+
+sub _used_in_to_list {
+  my ($self, $item) = @_;
+  return [ map { { id => $_->{item}{id}, name => $_->{item}{name}, quantity => $_->{quantity} } } @{ $item->used_in } ];
 }
 
 sub _arc_to_hash {
@@ -69,39 +87,39 @@ sub _arc_to_hash {
   return {
     id          => $arc->id,
     name        => $arc->name,
-    type        => $arc->type,
     description => $arc->description,
-    maps        => $arc->maps,
-    duration    => $arc->duration,
-    cooldown    => $arc->cooldown,
     loot        => $arc->loot,
-    xp_reward   => $arc->xp_reward,
-    coin_reward => $arc->coin_reward,
   };
 }
 
 sub _quest_to_hash {
   my ($self, $quest) = @_;
   return {
-    id                => $quest->id,
-    name              => $quest->name,
-    type              => $quest->type,
-    description       => $quest->description,
-    objectives        => $quest->objectives,
-    required_items    => $quest->required_items,
-    rewards           => $quest->rewards,
-    xp_reward         => $quest->xp_reward,
-    reputation_reward => $quest->reputation_reward,
+    id             => $quest->id,
+    name           => $quest->name,
+    trader_name    => $quest->trader_name,
+    objectives     => $quest->objectives,
+    required_items => $quest->required_items,
+    rewards        => $quest->rewards,
+    granted_items  => $quest->granted_items,
+    xp             => $quest->xp,
+    guide_url      => $quest->guide_url,
   };
 }
 
 sub _trader_to_hash {
   my ($self, $trader) = @_;
   return {
-    name        => $trader->name,
-    description => $trader->description,
-    location    => $trader->location,
-    inventory   => $trader->inventory,
+    name      => $trader->name,
+    inventory => $trader->inventory,
+  };
+}
+
+sub _time_slot_to_hash {
+  my ($self, $slot) = @_;
+  return {
+    start => $slot->start->iso8601 . 'Z',
+    end   => $slot->end->iso8601 . 'Z',
   };
 }
 
@@ -110,12 +128,38 @@ sub _event_to_hash {
   return {
     name             => $event->name,
     map              => $event->map,
-    description      => $event->description,
-    times            => $event->times,
-    days             => $event->days,
+    icon             => $event->icon,
+    times            => [ map { $self->_time_slot_to_hash($_) } @{ $event->times } ],
     is_active_now    => $event->is_active_now ? \1 : \0,
     time_until_start => $event->time_until_start,
     time_until_end   => $event->time_until_end,
+  };
+}
+
+sub _marker_to_hash {
+  my ($self, $marker) = @_;
+  return {
+    id                 => $marker->id,
+    name               => $marker->name,
+    type               => $marker->type,
+    category           => $marker->category,
+    subcategory        => $marker->subcategory,
+    x                  => $marker->x,
+    y                  => $marker->y,
+    z                  => $marker->z,
+    loot_areas         => $marker->lootAreas,
+    behind_locked_door => $marker->behindLockedDoor ? \1 : \0,
+  };
+}
+
+sub _requirement_to_hash {
+  my ($self, $req) = @_;
+  return {
+    item      => $req->{item}->name,
+    id        => $req->{item}->id,
+    count     => $req->{count},
+    item_type => $req->{item}->item_type,
+    rarity    => $req->{item}->rarity,
   };
 }
 
@@ -160,7 +204,7 @@ sub _build_server {
   # Tool: get_item_details
   $server->tool(
     name        => 'get_item_details',
-    description => 'Get detailed information about a specific item including crafting requirements, who sells it, and what it\'s used for.',
+    description => 'Get detailed information about a specific item including crafting components, recycle yield, who sells it and what it is used in.',
     input_schema => {
       type       => 'object',
       properties => {
@@ -173,28 +217,15 @@ sub _build_server {
     },
     code => sub {
       my ($tool, $args) = @_;
-      my $items = $self->api->items(search => $args->{name}, limit => 5);
+      my $items = $self->api->items(
+        search            => $args->{name},
+        limit             => 5,
+        includeComponents => 'true',
+      );
 
       return "No items found matching '$args->{name}'" unless @$items;
 
-      my @details = map {
-        {
-          id                    => $_->id,
-          name                  => $_->name,
-          category              => $_->category,
-          rarity                => $_->rarity,
-          description           => $_->description,
-          weight                => $_->weight,
-          stack_size            => $_->stack_size,
-          base_value            => $_->base_value,
-          stats                 => $_->stats,
-          crafting_requirements => $_->crafting_requirements,
-          sold_by               => $_->sold_by,
-          used_in               => $_->used_in,
-          compatible_with       => $_->compatible_with,
-          recycle_yield         => $_->recycle_yield,
-        }
-      } @$items;
+      my @details = map { $self->_item_details_to_hash($_) } @$items;
 
       return $self->_to_json(\@details);
     },
@@ -203,7 +234,7 @@ sub _build_server {
   # Tool: get_arcs
   $server->tool(
     name        => 'get_arcs',
-    description => 'Get ARC missions/events in the game. ARCs are time-limited events that spawn on maps with specific loot.',
+    description => 'Get the ARCs (enemy machines) in the game together with the loot they drop.',
     input_schema => {
       type       => 'object',
       properties => {
@@ -346,7 +377,7 @@ sub _build_server {
         map => {
           type        => 'string',
           description => 'Map name',
-          enum        => [qw(dam spaceport buried-city blue-gate stella-montis)],
+          enum        => [qw(dam spaceport buried-city blue-gate riven-tides stella-montis)],
         },
         category => {
           type        => 'string',
@@ -359,7 +390,7 @@ sub _build_server {
         },
         search => {
           type        => 'string',
-          description => 'Search term to filter marker names (case-insensitive)',
+          description => 'Search term to filter marker names and subcategories (case-insensitive)',
         },
       },
       required => ['map', 'category'],
@@ -383,23 +414,13 @@ sub _build_server {
         my $search = lc($args->{search});
         @filtered = grep {
           (defined $_->name && index(lc($_->name), $search) >= 0) ||
-          (defined $_->description && index(lc($_->description), $search) >= 0)
+          (defined $_->subcategory && index(lc($_->subcategory), $search) >= 0)
         } @filtered;
       }
 
       return "No markers found matching criteria" unless @filtered;
 
-      my @results = map {
-        {
-          name        => $_->name,
-          type        => $_->type,
-          category    => $_->category,
-          subcategory => $_->subcategory,
-          description => $_->description,
-          x           => $_->x,
-          y           => $_->y,
-        }
-      } @filtered;
+      my @results = map { $self->_marker_to_hash($_) } @filtered;
 
       return $self->_to_json(\@results);
     },
@@ -460,15 +481,7 @@ sub _build_server {
         $result = $self->api->calculate_requirements(items => $items);
       }
 
-      my @requirements = map {
-        {
-          item     => $_->{item}->name,
-          id       => $_->{item}->id,
-          count    => $_->{count},
-          category => $_->{item}->category,
-          rarity   => $_->{item}->rarity,
-        }
-      } @{$result->{requirements}};
+      my @requirements = map { $self->_requirement_to_hash($_) } @{$result->{requirements}};
 
       return $self->_to_json({
         requirements => \@requirements,
@@ -566,7 +579,7 @@ B<REST:> C<GET /api/items?search=ferro&limit=10>
 
 =head2 get_item_details
 
-Get full details about an item including crafting requirements, sellers, and usage.
+Get full details about an item including crafting components, recycle yield and sellers.
 
 B<Parameters:>
 
@@ -580,7 +593,7 @@ B<REST:> C<GET /api/items/:name>
 
 =head2 get_arcs
 
-Get ARC missions/events with loot information.
+Get ARCs with their loot drops.
 
 B<Parameters:>
 
@@ -646,13 +659,13 @@ B<Parameters:>
 
 =over
 
-=item * C<map> (string, required) - Map name: dam, spaceport, buried-city, blue-gate, stella-montis
+=item * C<map> (string, required) - Map name: dam, spaceport, buried-city, blue-gate, riven-tides, stella-montis
 
 =item * C<category> (string, required) - Category filter: arc, containers, locations, events
 
 =item * C<subcategory> (string, optional) - Subcategory filter (e.g., "tick", "extraction", "weapon_case")
 
-=item * C<search> (string, optional) - Search term for marker names (case-insensitive)
+=item * C<search> (string, optional) - Search term for marker names and subcategories (case-insensitive)
 
 =back
 

@@ -1,6 +1,15 @@
 Revision history for MCP-ArcRaiders
 
 {{$NEXT}}
+  - The tools return the item, ARC, quest, trader and event fields of
+    WWW::MetaForge 0.003: items carry item_type, value, stat_block,
+    workbench, components, recycle_components and sold_by; ARCs carry
+    their loot; quests carry trader_name, xp, nested rewards and guide_url;
+    events carry their icon and time slots as ISO 8601 UTC start/end pairs;
+    map markers carry id, coordinates, loot_areas and behind_locked_door
+  - get_item_details and /api/items/:name list the crafting components and
+    used_in (id, name, quantity of each item the item goes into)
+  - riven-tides is a selectable map
   - Initial release
   - Tools: search_items, get_item_details, get_arcs, get_quests,
     get_traders, find_item_seller, get_event_timers, get_active_events,

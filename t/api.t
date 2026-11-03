@@ -47,7 +47,7 @@ subtest 'search_items tool' => sub {
   my ($tool) = grep { $_->name eq 'search_items' } @{$mcp->server->tools};
   ok($tool, 'search_items tool exists');
 
-  my $result = $tool->code->($tool, { search => 'Ferro', limit => 10 });
+  my $result = $tool->code->($tool, { search => 'Anvil', limit => 10 });
   ok($result, 'returns result');
 
   my $data = eval { $json->decode($result) };
@@ -55,25 +55,44 @@ subtest 'search_items tool' => sub {
   ok(ref $data eq 'ARRAY', 'result is array');
   ok(@$data > 0, 'has items');
 
-  my $ferro = $data->[0];
-  like($ferro->{name}, qr/Ferro/i, 'found Ferro item');
+  my $item = $data->[0];
+  ok($item->{name}, 'item has name');
+  ok(exists $item->{item_type}, 'item has item_type');
+  ok(exists $item->{value}, 'item has value');
+  ok(exists $item->{stat_block}, 'item has stat_block');
+  ok(!exists $item->{category}, 'old category field is gone');
 };
 
 subtest 'get_item_details tool' => sub {
   my ($tool) = grep { $_->name eq 'get_item_details' } @{$mcp->server->tools};
   ok($tool, 'get_item_details tool exists');
 
-  my $result = $tool->code->($tool, { name => 'Ferro I' });
+  my $result = $tool->code->($tool, { name => 'Anvil I' });
   ok($result, 'returns result');
 
   my $data = eval { $json->decode($result) };
   ok(!$@, 'result is valid JSON') or diag("Parse error: $@, result: $result");
+  ok(ref $data eq 'ARRAY' && @$data, 'has items') or return;
 
-  if (ref $data eq 'ARRAY' && @$data) {
-    my $item = $data->[0];
-    is($item->{name}, 'Ferro I', 'correct item name');
-    ok(exists $item->{crafting_requirements}, 'has crafting_requirements');
-  }
+  my ($item) = grep { $_->{name} eq 'Anvil I' } @$data;
+  ok($item, 'found Anvil I') or return;
+  ok(@{ $item->{components} } > 0, 'has crafting components');
+  ok(exists $item->{recycle_components}, 'has recycle_components');
+  is($item->{sold_by}[0]{trader_name}, 'TianWen', 'sold_by names the trader');
+  ok(exists $item->{workbench}, 'has workbench');
+  ok(!exists $item->{crafting_requirements}, 'old crafting_requirements field is gone');
+};
+
+subtest 'get_item_details used_in' => sub {
+  my ($tool) = grep { $_->name eq 'get_item_details' } @{$mcp->server->tools};
+  my $data = eval { $json->decode($tool->code->($tool, { name => 'Advanced ARC Powercell' })) };
+  ok(ref $data eq 'ARRAY' && @$data, 'has items') or return;
+
+  my ($item) = grep { $_->{name} eq 'Advanced ARC Powercell' } @$data;
+  ok($item, 'found item') or return;
+  ok(@{ $item->{used_in} } > 0, 'used_in lists the crafted items');
+  is_deeply([ sort keys %{ $item->{used_in}[0] } ], [qw(id name quantity)], 'used_in entry is id, name, quantity');
+  is($item->{used_in}[0]{id}, 'energy-ammo', 'used_in names the crafted item');
 };
 
 subtest 'get_traders tool' => sub {
@@ -91,6 +110,8 @@ subtest 'get_traders tool' => sub {
   my $trader = $data->[0];
   ok($trader->{name}, 'trader has name');
   ok(exists $trader->{inventory}, 'trader has inventory');
+  ok(@{ $trader->{inventory} } > 0, 'inventory has items');
+  ok(exists $trader->{inventory}[0]{trader_price}, 'inventory item has trader_price');
 };
 
 subtest 'get_event_timers tool' => sub {
@@ -109,6 +130,9 @@ subtest 'get_event_timers tool' => sub {
     ok($event->{name}, 'event has name');
     ok(exists $event->{is_active_now}, 'has is_active_now');
     ok(exists $event->{times}, 'has times');
+    ok(ref $event->{times} eq 'ARRAY' && @{ $event->{times} }, 'times is a list of slots');
+    like($event->{times}[0]{start}, qr/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/, 'slot start is ISO 8601 UTC');
+    ok(exists $event->{icon}, 'has icon');
   }
 };
 
@@ -126,6 +150,9 @@ subtest 'get_quests tool' => sub {
   if (@$data) {
     my $quest = $data->[0];
     ok($quest->{name}, 'quest has name');
+    ok(exists $quest->{trader_name}, 'quest has trader_name');
+    ok(exists $quest->{xp}, 'quest has xp');
+    ok(ref $quest->{rewards} eq 'ARRAY', 'quest rewards is a list');
   }
 };
 
@@ -147,6 +174,22 @@ subtest 'get_arcs tool' => sub {
   }
 };
 
+subtest 'get_map_data tool' => sub {
+  my ($tool) = grep { $_->name eq 'get_map_data' } @{$mcp->server->tools};
+  ok($tool, 'get_map_data tool exists');
+
+  my $result = $tool->code->($tool, { map => 'dam', category => 'arc', subcategory => 'tick' });
+  my $data = eval { $json->decode($result) };
+  ok(!$@, 'result is valid JSON') or diag("Parse error: $@, result: $result");
+  ok(ref $data eq 'ARRAY' && @$data, 'has markers') or return;
+
+  my $marker = $data->[0];
+  is($marker->{category}, 'arc', 'marker category');
+  is($marker->{subcategory}, 'tick', 'marker subcategory');
+  ok(defined $marker->{x} && defined $marker->{y}, 'marker has coordinates');
+  ok(exists $marker->{behind_locked_door}, 'marker has behind_locked_door');
+};
+
 subtest 'list_maps tool' => sub {
   my ($tool) = grep { $_->name eq 'list_maps' } @{$mcp->server->tools};
   ok($tool, 'list_maps tool exists');
@@ -157,7 +200,8 @@ subtest 'list_maps tool' => sub {
   my $data = eval { $json->decode($result) };
   ok(!$@, 'result is valid JSON');
   ok(ref $data eq 'ARRAY', 'result is array');
-  ok(@$data >= 5, 'has at least 5 maps');
+  ok(@$data >= 6, 'has at least 6 maps');
+  ok((grep { $_->{id} eq 'riven-tides' } @$data), 'contains riven-tides');
 
   my @names = map { $_->{name} } @$data;
   ok((grep { /Dam/ } @names), 'contains Dam');
@@ -168,7 +212,7 @@ subtest 'calculate_requirements tool - direct' => sub {
   ok($tool, 'calculate_requirements tool exists');
 
   my $result = $tool->code->($tool, {
-    items => [{ item => 'Ferro II', count => 1 }],
+    items => [{ item => 'Anvil I', count => 1 }],
     base_only => 0,
   });
   ok($result, 'returns result');
@@ -183,7 +227,7 @@ subtest 'calculate_requirements tool - direct' => sub {
 
   if (@{$data->{requirements}}) {
     my @names = map { $_->{item} } @{$data->{requirements}};
-    diag("Direct requirements for Ferro II: " . join(", ", @names));
+    diag("Direct requirements for Anvil I: " . join(", ", @names));
   }
 };
 
@@ -191,7 +235,7 @@ subtest 'calculate_requirements tool - base materials' => sub {
   my ($tool) = grep { $_->name eq 'calculate_requirements' } @{$mcp->server->tools};
 
   my $result = $tool->code->($tool, {
-    items => [{ item => 'Ferro III', count => 1 }],
+    items => [{ item => 'Anvil II', count => 1 }],
     base_only => 1,
   });
   ok($result, 'returns result');
@@ -204,10 +248,11 @@ subtest 'calculate_requirements tool - base materials' => sub {
 
   if (@{$data->{requirements}}) {
     my @names = map { $_->{item} } @{$data->{requirements}};
-    diag("Base requirements for Ferro III: " . join(", ", @names));
+    diag("Base requirements for Anvil II: " . join(", ", @names));
 
     # Each requirement should have expected fields
     my $req = $data->{requirements}[0];
+    ok($req->{item_type}, 'requirement has item_type');
     ok($req->{item}, 'requirement has item name');
     ok($req->{count}, 'requirement has count');
   }
