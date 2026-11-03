@@ -28,6 +28,7 @@
 # Build artifacts
 *.tar.gz
 .build/
+/MCP-ArcRaiders-*
 local/
 blib/
 _build/
