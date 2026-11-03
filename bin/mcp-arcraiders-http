@@ -21,16 +21,20 @@ get '/' => sub ($c) {
   $c->render(json => {
     name    => 'ARC Raiders API',
     version => $MCP::ArcRaiders::VERSION,
+    source  => { name => $MCP::ArcRaiders::SOURCE_NAME, url => $MCP::ArcRaiders::SOURCE_URL },
     endpoints => {
       mcp  => '/mcp (Claude MCP protocol)',
       rest => {
         items         => 'GET /api/items?search=&limit=',
         item          => 'GET /api/items/:name',
         arcs          => 'GET /api/arcs',
-        quests        => 'GET /api/quests?type=',
+        quests        => 'GET /api/quests',
         traders       => 'GET /api/traders',
-        events        => 'GET /api/events',
-        active_events => 'GET /api/events/active',
+        ermal         => 'GET /api/ermal',
+        hideout       => 'GET /api/hideout?station=&level=',
+        weekly_trials => 'GET /api/weekly-trials?include_all=',
+        events        => 'GET /api/events?region=',
+        active_events => 'GET /api/events/active?region=',
         maps          => 'GET /api/maps',
         map_data      => 'GET /api/maps/:map?category=&subcategory=&search=',
         requirements  => 'POST /api/requirements',
@@ -48,12 +52,15 @@ get '/openapi.json' => sub ($c) {
     $base_url = "$proto://$host";
   }
   $base_url =~ s{/$}{};  # Remove trailing slash
+  my $region_parameter = { name => 'region', in => 'query', schema => { type => 'string', enum => [@MCP::ArcRaiders::REGIONS] }, description => 'Server region of the schedule (default: europe)' };
   $c->render(json => {
     openapi => '3.1.0',
     info => {
       title       => 'ARC Raiders Game Data API',
-      description => 'API for ARC Raiders game data - items, quests, traders, events, maps',
+      description => "API for ARC Raiders game data - items, ARCs, quests, traders, Ermal, hideout, weekly trials, events, maps. $MCP::ArcRaiders::SOURCE_TEXT",
       version     => $MCP::ArcRaiders::VERSION,
+      termsOfService => $MCP::ArcRaiders::SOURCE_URL,
+      'x-data-source' => { name => $MCP::ArcRaiders::SOURCE_NAME, url => $MCP::ArcRaiders::SOURCE_URL },
     },
     servers => [{ url => $base_url }],
     paths => {
@@ -88,11 +95,8 @@ get '/openapi.json' => sub ($c) {
       '/api/quests' => {
         get => {
           operationId => 'getQuests',
-          summary     => 'Get quests',
-          parameters  => [
-            { name => 'type', in => 'query', schema => { type => 'string', enum => ['StoryQuest', 'SideQuest'] } },
-          ],
-          responses => { 200 => { description => 'List of quests' } },
+          summary     => 'Get all quests with description, objectives, rewards and manifest',
+          responses   => { 200 => { description => 'List of quests' } },
         },
       },
       '/api/traders' => {
@@ -102,10 +106,39 @@ get '/openapi.json' => sub ($c) {
           responses   => { 200 => { description => 'List of traders' } },
         },
       },
+      '/api/ermal' => {
+        get => {
+          operationId => 'getErmal',
+          summary     => 'Get Ermal\'s offers and permanent services',
+          responses   => { 200 => { description => 'Offers and services' } },
+        },
+      },
+      '/api/hideout' => {
+        get => {
+          operationId => 'getHideout',
+          summary     => 'Get the hideout stations and what each upgrade level needs',
+          parameters  => [
+            { name => 'station', in => 'query', schema => { type => 'string' }, description => 'Station id or name (e.g., weapon-bench, Gunsmith)' },
+            { name => 'level', in => 'query', schema => { type => 'integer', minimum => 1 }, description => 'Only this upgrade level' },
+          ],
+          responses => { 200 => { description => 'Hideout stations with levels' } },
+        },
+      },
+      '/api/weekly-trials' => {
+        get => {
+          operationId => 'getWeeklyTrials',
+          summary     => 'Get the running and coming weekly trials with their time window',
+          parameters  => [
+            { name => 'include_all', in => 'query', schema => { type => 'boolean', default => \0 }, description => 'Also list the trials that are neither running nor coming' },
+          ],
+          responses => { 200 => { description => 'Weekly trials and the window' } },
+        },
+      },
       '/api/events' => {
         get => {
           operationId => 'getEventTimers',
           summary     => 'Get event schedules',
+          parameters  => [ $region_parameter ],
           responses   => { 200 => { description => 'List of events with times' } },
         },
       },
@@ -113,6 +146,7 @@ get '/openapi.json' => sub ($c) {
         get => {
           operationId => 'getActiveEvents',
           summary     => 'Get currently active events',
+          parameters  => [ $region_parameter ],
           responses   => { 200 => { description => 'Active events' } },
         },
       },
@@ -128,8 +162,8 @@ get '/openapi.json' => sub ($c) {
           operationId => 'getMapData',
           summary     => 'Get map markers/POIs filtered by category',
           parameters  => [
-            { name => 'map', in => 'path', required => \1, schema => { type => 'string', enum => [qw(dam spaceport buried-city blue-gate riven-tides stella-montis)] } },
-            { name => 'category', in => 'query', required => \1, schema => { type => 'string', enum => [qw(arc containers locations events)] }, description => 'Category filter (required)' },
+            { name => 'map', in => 'path', required => \1, schema => { type => 'string', enum => [$api->maps] } },
+            { name => 'category', in => 'query', required => \1, schema => { type => 'string', enum => [qw(arc containers locations events nature quests)] }, description => 'Category filter (required)' },
             { name => 'subcategory', in => 'query', schema => { type => 'string' }, description => 'Subcategory filter (e.g., tick, extraction)' },
             { name => 'search', in => 'query', schema => { type => 'string' }, description => 'Search term for marker names and subcategories' },
           ],
@@ -193,11 +227,7 @@ get '/api/arcs' => sub ($c) {
 };
 
 get '/api/quests' => sub ($c) {
-  my %params;
-  $params{type} = $c->param('type') if $c->param('type');
-
-  my $quests = $api->quests(%params);
-  $c->render(json => [ map { _quest_hash($_) } @$quests ]);
+  $c->render(json => [ map { _quest_hash($_) } @{ $mcp->_all_quests } ]);
 };
 
 get '/api/traders' => sub ($c) {
@@ -205,13 +235,43 @@ get '/api/traders' => sub ($c) {
   $c->render(json => [ map { _trader_hash($_) } @$traders ]);
 };
 
+get '/api/ermal' => sub ($c) {
+  my $ermal = $mcp->_ermal_result;
+  return $c->render(json => { error => 'Not found' }, status => 404) unless $ermal;
+  $c->render(json => $ermal);
+};
+
+get '/api/hideout' => sub ($c) {
+  my $level = $c->param('level');
+  return $c->render(json => { error => 'level must be a positive integer' }, status => 400)
+    if defined $level && $level !~ /\A[1-9][0-9]*\z/;
+  my ($stations, $message) = $mcp->_hideout_result(station => $c->param('station'), level => $level);
+  return $c->render(json => { error => $message }, status => 404) unless $stations;
+  $c->render(json => $stations);
+};
+
+get '/api/weekly-trials' => sub ($c) {
+  my $all = $c->param('include_all') // '';
+  $c->render(json => $mcp->_weekly_trials_result(include_all => $all !~ /\A(?:|0|false|no)\z/i));
+};
+
+# The events of a region; an unknown region would silently answer with europe
+sub _region_events ($c) {
+  my $region = $c->param('region');
+  unless (!defined $region || grep { $_ eq $region } @MCP::ArcRaiders::REGIONS) {
+    $c->render(json => { error => 'region must be one of: ' . join(', ', @MCP::ArcRaiders::REGIONS) }, status => 400);
+    return undef;
+  }
+  return $mcp->_events(region => $region);
+}
+
 get '/api/events' => sub ($c) {
-  my $events = $api->event_timers_hourly;
+  my $events = _region_events($c) or return;
   $c->render(json => [ map { _event_hash($_) } @$events ]);
 };
 
 get '/api/events/active' => sub ($c) {
-  my $events = $api->event_timers_hourly;
+  my $events = _region_events($c) or return;
   my @active = grep { $_->is_active_now } @$events;
   $c->render(json => [ map { _event_hash($_) } @active ]);
 };
@@ -233,26 +293,11 @@ get '/api/maps/:map' => sub ($c) {
 
   return $c->render(json => { error => 'Not found' }, status => 404) unless $markers && @$markers;
 
-  # Filter by category (required)
-  my @filtered = grep { $_->category eq $category } @$markers;
+  my $filtered = $mcp->_filter_markers($markers, category => $category, subcategory => $subcategory, search => $search);
 
-  # Filter by subcategory (optional)
-  if ($subcategory) {
-    @filtered = grep { $_->subcategory && $_->subcategory eq $subcategory } @filtered;
-  }
+  return $c->render(json => { error => 'No markers found matching criteria' }, status => 404) unless @$filtered;
 
-  # Filter by search term (optional, case-insensitive)
-  if ($search) {
-    my $term = lc($search);
-    @filtered = grep {
-      (defined $_->name && index(lc($_->name), $term) >= 0) ||
-      (defined $_->subcategory && index(lc($_->subcategory), $term) >= 0)
-    } @filtered;
-  }
-
-  return $c->render(json => { error => 'No markers found matching criteria' }, status => 404) unless @filtered;
-
-  $c->render(json => [ map { _marker_hash($_) } @filtered ]);
+  $c->render(json => [ map { _marker_hash($_) } @$filtered ]);
 };
 
 post '/api/requirements' => sub ($c) {
@@ -274,63 +319,13 @@ post '/api/requirements' => sub ($c) {
   $c->render(json => { requirements => \@requirements, missing => $result->{missing} });
 };
 
-# Helper functions
-sub _item_hash ($item) {
-  return {
-    id => $item->id, name => $item->name, item_type => $item->item_type,
-    rarity => $item->rarity, description => $item->description,
-    weight => $item->weight, stack_size => $item->stack_size,
-    value => $item->value, stat_block => $item->stat_block,
-  };
-}
-
-sub _item_detail ($item) {
-  return {
-    %{ _item_hash($item) },
-    workbench => $item->workbench, loadout_slots => $item->loadout_slots,
-    components => $item->components, recycle_components => $item->recycle_components,
-    sold_by => $item->sold_by,
-    used_in => [ map { { id => $_->{item}{id}, name => $_->{item}{name}, quantity => $_->{quantity} } } @{ $item->used_in } ],
-  };
-}
-
-sub _arc_hash ($arc) {
-  return {
-    id => $arc->id, name => $arc->name,
-    description => $arc->description, loot => $arc->loot,
-  };
-}
-
-sub _quest_hash ($quest) {
-  return {
-    id => $quest->id, name => $quest->name, trader_name => $quest->trader_name,
-    objectives => $quest->objectives, required_items => $quest->required_items,
-    rewards => $quest->rewards, granted_items => $quest->granted_items,
-    xp => $quest->xp, guide_url => $quest->guide_url,
-  };
-}
-
-sub _trader_hash ($trader) {
-  return { name => $trader->name, inventory => $trader->inventory };
-}
-
-sub _event_hash ($event) {
-  return {
-    name => $event->name, map => $event->map, icon => $event->icon,
-    times => [ map { { start => $_->start->iso8601 . 'Z', end => $_->end->iso8601 . 'Z' } } @{ $event->times } ],
-    is_active_now => $event->is_active_now ? \1 : \0,
-    time_until_start => $event->time_until_start, time_until_end => $event->time_until_end,
-  };
-}
-
-sub _marker_hash ($marker) {
-  return {
-    id => $marker->id, name => $marker->name, type => $marker->type,
-    category => $marker->category, subcategory => $marker->subcategory,
-    x => $marker->x, y => $marker->y, z => $marker->z,
-    loot_areas => $marker->lootAreas,
-    behind_locked_door => $marker->behindLockedDoor ? \1 : \0,
-  };
-}
+# Helper functions: the shapers of MCP::ArcRaiders, so MCP and REST answer alike
+sub _item_hash ($item)    { $mcp->_item_to_hash($item) }
+sub _item_detail ($item)  { $mcp->_item_details_to_hash($item) }
+sub _arc_hash ($arc)      { $mcp->_arc_to_hash($arc) }
+sub _quest_hash ($quest)  { $mcp->_quest_to_hash($quest) }
+sub _trader_hash ($trader) { $mcp->_trader_to_hash($trader) }
+sub _event_hash ($event)  { $mcp->_event_to_hash($event) }
+sub _marker_hash ($marker) { $mcp->_marker_to_hash($marker) }
 
 app->start;

@@ -6,9 +6,18 @@ use MCP::Server;
 use WWW::MetaForge::ArcRaiders;
 use WWW::MetaForge::Cache;
 use JSON::MaybeXS;
+use POSIX qw(strftime);
 use namespace::clean;
 
 our $VERSION = '0.001';
+
+our $SOURCE_NAME = 'MetaForge';
+our $SOURCE_URL  = 'https://metaforge.app/arc-raiders';
+our $SOURCE_TEXT = "ARC Raiders game data: $SOURCE_NAME, $SOURCE_URL";
+
+# Server regions the events-schedule endpoint serves (an unknown region
+# silently returns the europe schedule)
+our @REGIONS = qw(europe north-america oceania east-asia brazil all);
 
 has api => (
   is      => 'ro',
@@ -25,7 +34,7 @@ has cache => (
 has json => (
   is      => 'ro',
   lazy    => 1,
-  default => sub { JSON::MaybeXS->new(utf8 => 1, pretty => 1, canonical => 1, convert_blessed => 1) },
+  default => sub { JSON::MaybeXS->new(pretty => 1, canonical => 1, convert_blessed => 1) },
 );
 
 has server => (
@@ -36,7 +45,8 @@ has server => (
 
 sub _build_cache {
   my ($self) = @_;
-  return WWW::MetaForge::Cache->new(namespace => 'mcp-arcraiders');
+  # The trader offers (Ermal's change weekly) must not outlive a long-running server
+  return WWW::MetaForge::Cache->new(namespace => 'mcp-arcraiders', ttl => { traders => 3600 });
 }
 
 sub _build_api {
@@ -68,18 +78,46 @@ sub _item_details_to_hash {
   my ($self, $item) = @_;
   return {
     %{ $self->_item_to_hash($item) },
+    subcategory        => $item->subcategory,
+    flavor_text        => $item->flavor_text,
+    ammo_type          => $item->ammo_type,
+    shield_type        => $item->shield_type,
+    loot_area          => $item->loot_area,
+    guide_url          => $item->guide_url,
     workbench          => $item->workbench,
     loadout_slots      => $item->loadout_slots,
     components         => $item->components,
     recycle_components => $item->recycle_components,
     sold_by            => $item->sold_by,
     used_in            => $self->_used_in_to_list($item),
+    recycle_from       => $self->_recycle_from_to_list($item),
+    dropped_by         => $self->_dropped_by_to_list($item),
+    mods               => $self->_mods_to_list($item),
+    locations          => $item->locations,
   };
 }
 
 sub _used_in_to_list {
   my ($self, $item) = @_;
   return [ map { { id => $_->{item}{id}, name => $_->{item}{name}, quantity => $_->{quantity} } } @{ $item->used_in } ];
+}
+
+# The items that recycle into this item
+sub _recycle_from_to_list {
+  my ($self, $item) = @_;
+  return [ map { { id => $_->{item}{id}, name => $_->{item}{name}, quantity => $_->{quantity} } } @{ $item->recycle_from } ];
+}
+
+# The ARCs that drop this item
+sub _dropped_by_to_list {
+  my ($self, $item) = @_;
+  return [ map { { id => $_->{arc}{id}, name => $_->{arc}{name} } } @{ $item->dropped_by } ];
+}
+
+# The modifications that fit this item
+sub _mods_to_list {
+  my ($self, $item) = @_;
+  return [ map { { id => $_->{mod}{id}, name => $_->{mod}{name} } } @{ $item->mods } ];
 }
 
 sub _arc_to_hash {
@@ -89,21 +127,25 @@ sub _arc_to_hash {
     name        => $arc->name,
     description => $arc->description,
     loot        => $arc->loot,
+    data        => $arc->data,
   };
 }
 
 sub _quest_to_hash {
   my ($self, $quest) = @_;
   return {
-    id             => $quest->id,
-    name           => $quest->name,
-    trader_name    => $quest->trader_name,
-    objectives     => $quest->objectives,
-    required_items => $quest->required_items,
-    rewards        => $quest->rewards,
-    granted_items  => $quest->granted_items,
-    xp             => $quest->xp,
-    guide_url      => $quest->guide_url,
+    id                 => $quest->id,
+    name               => $quest->name,
+    description        => $quest->description,
+    trader_name        => $quest->trader_name,
+    objectives         => $quest->objectives,
+    required_items     => $quest->required_items,
+    rewards            => $quest->rewards,
+    additional_rewards => $quest->additional_rewards,
+    granted_items      => $quest->granted_items,
+    xp                 => $quest->xp,
+    guide_url          => $quest->guide_url,
+    manifest           => $quest->manifest,
   };
 }
 
@@ -128,6 +170,7 @@ sub _event_to_hash {
   return {
     name             => $event->name,
     map              => $event->map,
+    region           => $event->region,
     icon             => $event->icon,
     times            => [ map { $self->_time_slot_to_hash($_) } @{ $event->times } ],
     is_active_now    => $event->is_active_now ? \1 : \0,
@@ -149,7 +192,185 @@ sub _marker_to_hash {
     z                  => $marker->z,
     loot_areas         => $marker->lootAreas,
     behind_locked_door => $marker->behindLockedDoor ? \1 : \0,
+    community          => $marker->community,
+    source_id          => $marker->source_id,
+    route_id           => $marker->route_id,
   };
+}
+
+sub _iso8601 {
+  my ($self, $epoch) = @_;
+  return undef unless defined $epoch;
+  return strftime('%Y-%m-%dT%H:%M:%SZ', gmtime $epoch);
+}
+
+sub _ermal_to_hash {
+  my ($self, $ermal) = @_;
+  return {
+    synced_at          => $ermal->synced_at,
+    offers             => $ermal->offers,
+    permanent_services => $ermal->permanent_services,
+  };
+}
+
+sub _hideout_level_to_hash {
+  my ($self, $level) = @_;
+  return {
+    level               => $level->number,
+    required_items      => $level->required_items,
+    unlock_requirements => $level->unlock_requirements,
+    crafts              => $level->crafts,
+  };
+}
+
+sub _hideout_station_to_hash {
+  my ($self, $station, $levels) = @_;
+  return {
+    id        => $station->id,
+    name      => $station->name,
+    max_level => $station->max_level,
+    levels    => [ map { $self->_hideout_level_to_hash($_) } @{ $levels // $station->levels } ],
+  };
+}
+
+sub _trial_to_hash {
+  my ($self, $trial) = @_;
+  return {
+    id             => $trial->id,
+    trial_id       => $trial->trial_id,
+    name           => $trial->name,
+    type           => $trial->type,
+    is_active      => $trial->is_active ? \1 : \0,
+    upcoming       => $trial->upcoming ? \1 : \0,
+    window_start   => $self->_iso8601($trial->window_start),
+    window_end     => $self->_iso8601($trial->window_end),
+    multiplier     => $trial->multiplier,
+    parameters     => $trial->parameters,
+    map_names      => $trial->map_names,
+    guide_link     => $trial->guide_link,
+    video_link     => $trial->video_link,
+    image_url      => $trial->image_url,
+    database_links => $trial->database_links,
+    sort_order     => $trial->sort_order,
+  };
+}
+
+sub _trial_window_to_hash {
+  my ($self, $window) = @_;
+  return {
+    active_window_end => $self->_iso8601($window->active_window_end),
+    next_window_start => $self->_iso8601($window->next_window_start),
+  };
+}
+
+# Shared by the MCP tool and the REST route: Ermal's offers and services
+sub _ermal_result {
+  my ($self) = @_;
+  my $ermal = $self->api->ermal or return;
+  return $self->_ermal_to_hash($ermal);
+}
+
+# Shared: the stations (by id or name, case-insensitive) and levels asked for.
+# Returns an error sentence as the second value when nothing matches.
+sub _hideout_result {
+  my ($self, %args) = @_;
+  my @stations = @{ $self->api->hideout };
+
+  if (defined $args{station} && length $args{station}) {
+    my $wanted = lc $args{station};
+    @stations = grep { lc $_->id eq $wanted || lc $_->name eq $wanted } @stations;
+    return (undef, "No hideout station found matching '$args{station}'") unless @stations;
+  }
+
+  my @result;
+  for my $station (@stations) {
+    my @levels = @{ $station->levels };
+    @levels = grep { $_->number == $args{level} } @levels if defined $args{level};
+    next if defined $args{level} && !@levels;
+    push @result, $self->_hideout_station_to_hash($station, \@levels);
+  }
+
+  return (undef, "No hideout level $args{level} found") unless @result;
+  return (\@result);
+}
+
+# Shared: the trials running now and the coming ones (all of them with
+# include_all), plus the window the answer was valid for
+sub _weekly_trials_result {
+  my ($self, %args) = @_;
+  my @trials = @{ $self->api->weekly_trials };
+  @trials = grep { $_->is_active || $_->upcoming } @trials unless $args{include_all};
+  return {
+    window => $self->_trial_window_to_hash($self->api->weekly_trials_window),
+    trials => [ map { $self->_trial_to_hash($_) } @trials ],
+  };
+}
+
+# Shared: the events (of one region, europe when none is given) from the
+# hourly cache
+sub _events {
+  my ($self, %args) = @_;
+  my %params;
+  $params{region} = $args{region} if defined $args{region} && length $args{region};
+  return $self->api->event_timers_hourly(%params);
+}
+
+# Shared: all quests over all pages (the API ignores a quest type)
+sub _all_quests {
+  my ($self) = @_;
+  return $self->api->quests_all;
+}
+
+# Shared: the markers of one category, narrowed by subcategory and search term
+sub _filter_markers {
+  my ($self, $markers, %args) = @_;
+  my @filtered = grep { ($_->category // '') eq $args{category} } @$markers;
+
+  if ($args{subcategory}) {
+    @filtered = grep { $_->subcategory && $_->subcategory eq $args{subcategory} } @filtered;
+  }
+
+  if ($args{search}) {
+    my $search = lc($args{search});
+    @filtered = grep {
+      (defined $_->name && index(lc($_->name), $search) >= 0) ||
+      (defined $_->subcategory && index(lc($_->subcategory), $search) >= 0)
+    } @filtered;
+  }
+
+  return \@filtered;
+}
+
+# Shared: the traders (and Ermal's offers) that sell an item by exact name
+sub _item_sellers {
+  my ($self, $item_name) = @_;
+  my @sellers;
+
+  for my $trader (@{ $self->api->traders }) {
+    if (my $item = $trader->find_item($item_name)) {
+      push @sellers, {
+        trader => $trader->name,
+        item   => $item,
+      };
+    }
+  }
+
+  if (my $ermal = $self->api->ermal) {
+    for my $offer (@{ $ermal->offers }) {
+      my $item = $offer->{item};
+      next unless $item && lc($item->{name} // '') eq lc $item_name;
+      push @sellers, {
+        trader         => 'Ermal',
+        item           => $item,
+        coin_cost      => $offer->{coin_cost},
+        offer_start    => $offer->{offer_start},
+        offer_end      => $offer->{offer_end},
+        accepted_items => $offer->{accepted_items},
+      };
+    }
+  }
+
+  return \@sellers;
 }
 
 sub _requirement_to_hash {
@@ -167,8 +388,9 @@ sub _build_server {
   my ($self) = @_;
 
   my $server = MCP::Server->new(
-    name    => 'arcraiders',
-    version => $VERSION,
+    name         => 'arcraiders',
+    version      => $VERSION,
+    instructions => "Answers questions about ARC Raiders: items, ARCs, quests, traders, Ermal, the hideout, weekly trials, events and maps. Source of the data: $SOURCE_NAME, $SOURCE_URL - name the source when you share it.",
   );
 
   # Tool: search_items
@@ -259,23 +481,14 @@ sub _build_server {
   # Tool: get_quests
   $server->tool(
     name        => 'get_quests',
-    description => 'Get quest information including objectives, requirements, and rewards.',
+    description => 'Get all quests (every page of the API) with description, objectives, requirements, rewards and the manifest with prerequisites and objective graph.',
     input_schema => {
       type       => 'object',
-      properties => {
-        type => {
-          type        => 'string',
-          description => 'Filter by quest type (e.g., "StoryQuest", "SideQuest")',
-          enum        => ['StoryQuest', 'SideQuest'],
-        },
-      },
+      properties => {},
     },
     code => sub {
       my ($tool, $args) = @_;
-      my %params;
-      $params{type} = $args->{type} if $args->{type};
-
-      my $quests = $self->api->quests(%params);
+      my $quests = $self->_all_quests;
       my @results = map { $self->_quest_to_hash($_) } @$quests;
       return $self->_to_json(\@results);
     },
@@ -300,7 +513,7 @@ sub _build_server {
   # Tool: find_item_seller
   $server->tool(
     name        => 'find_item_seller',
-    description => 'Find which traders sell a specific item.',
+    description => 'Find which traders (and which of Ermal\'s offers) sell a specific item.',
     input_schema => {
       type       => 'object',
       properties => {
@@ -314,22 +527,18 @@ sub _build_server {
     code => sub {
       my ($tool, $args) = @_;
       my $item_name = $args->{item_name};
-      my $traders = $self->api->traders;
+      my $sellers = $self->_item_sellers($item_name);
 
-      my @sellers;
-      for my $trader (@$traders) {
-        if (my $item = $trader->find_item($item_name)) {
-          push @sellers, {
-            trader => $trader->name,
-            item   => $item,
-          };
-        }
-      }
-
-      return "No traders found selling '$item_name'" unless @sellers;
-      return $self->_to_json(\@sellers);
+      return "No traders found selling '$item_name'" unless @$sellers;
+      return $self->_to_json($sellers);
     },
   );
+
+  my $region_property = {
+    type        => 'string',
+    description => 'Server region of the schedule (default: europe). Each region has its own schedule; "all" returns every region, each event with its region.',
+    enum        => [@REGIONS],
+  };
 
   # Tool: get_event_timers
   $server->tool(
@@ -337,11 +546,13 @@ sub _build_server {
     description => 'Get current event schedules and timers. Shows which events are active now and when they start/end. Data is cached and refreshes hourly.',
     input_schema => {
       type       => 'object',
-      properties => {},
+      properties => {
+        region => $region_property,
+      },
     },
     code => sub {
       my ($tool, $args) = @_;
-      my $events = $self->api->event_timers_hourly;
+      my $events = $self->_events(region => $args->{region});
       my @results = map { $self->_event_to_hash($_) } @$events;
       return $self->_to_json(\@results);
     },
@@ -353,11 +564,13 @@ sub _build_server {
     description => 'Get only currently active events right now.',
     input_schema => {
       type       => 'object',
-      properties => {},
+      properties => {
+        region => $region_property,
+      },
     },
     code => sub {
       my ($tool, $args) = @_;
-      my $events = $self->api->event_timers_hourly;
+      my $events = $self->_events(region => $args->{region});
       my @active = grep { $_->is_active_now } @$events;
 
       return "No events are currently active" unless @active;
@@ -376,13 +589,13 @@ sub _build_server {
       properties => {
         map => {
           type        => 'string',
-          description => 'Map name',
-          enum        => [qw(dam spaceport buried-city blue-gate riven-tides stella-montis)],
+          description => 'Map id as listed by list_maps',
+          enum        => [$self->api->maps],
         },
         category => {
           type        => 'string',
           description => 'Category to filter by (required)',
-          enum        => [qw(arc containers locations events)],
+          enum        => [qw(arc containers locations events nature quests)],
         },
         subcategory => {
           type        => 'string',
@@ -401,26 +614,11 @@ sub _build_server {
 
       return "No map data found for '$args->{map}'" unless $markers && @$markers;
 
-      # Filter by category (required)
-      my @filtered = grep { $_->category eq $args->{category} } @$markers;
+      my $filtered = $self->_filter_markers($markers, %$args{qw(category subcategory search)});
 
-      # Filter by subcategory (optional)
-      if ($args->{subcategory}) {
-        @filtered = grep { $_->subcategory && $_->subcategory eq $args->{subcategory} } @filtered;
-      }
+      return "No markers found matching criteria" unless @$filtered;
 
-      # Filter by search term (optional, case-insensitive)
-      if ($args->{search}) {
-        my $search = lc($args->{search});
-        @filtered = grep {
-          (defined $_->name && index(lc($_->name), $search) >= 0) ||
-          (defined $_->subcategory && index(lc($_->subcategory), $search) >= 0)
-        } @filtered;
-      }
-
-      return "No markers found matching criteria" unless @filtered;
-
-      my @results = map { $self->_marker_to_hash($_) } @filtered;
+      my @results = map { $self->_marker_to_hash($_) } @$filtered;
 
       return $self->_to_json(\@results);
     },
@@ -439,6 +637,70 @@ sub _build_server {
       my %names = $self->api->map_display_names;
       my @maps = map { { id => $_, name => $names{$_} } } $self->api->maps;
       return $self->_to_json(\@maps);
+    },
+  );
+
+  # Tool: get_ermal
+  $server->tool(
+    name        => 'get_ermal',
+    description => 'Get Ermal: this week\'s offers (item, coin cost, offer period, the items he accepts as payment) and his permanent services such as the Expedition Vault and the Stash Expansion.',
+    input_schema => {
+      type       => 'object',
+      properties => {},
+    },
+    code => sub {
+      my ($tool, $args) = @_;
+      my $ermal = $self->_ermal_result;
+
+      return "No offers from Ermal found" unless $ermal;
+      return $self->_to_json($ermal);
+    },
+  );
+
+  # Tool: get_hideout
+  $server->tool(
+    name        => 'get_hideout',
+    description => 'Get the hideout stations with their upgrade levels: for each level the items it needs (item id and quantity), unlock requirements and the crafts it opens.',
+    input_schema => {
+      type       => 'object',
+      properties => {
+        station => {
+          type        => 'string',
+          description => 'Station id or name (e.g., "weapon-bench", "Gunsmith"); all stations when left out',
+        },
+        level => {
+          type        => 'integer',
+          description => 'Only this upgrade level',
+          minimum     => 1,
+        },
+      },
+    },
+    code => sub {
+      my ($tool, $args) = @_;
+      my ($stations, $message) = $self->_hideout_result(%$args{qw(station level)});
+
+      return $message unless $stations;
+      return $self->_to_json($stations);
+    },
+  );
+
+  # Tool: get_weekly_trials
+  $server->tool(
+    name        => 'get_weekly_trials',
+    description => 'Get the weekly trials: the ones running now and the coming ones, with the time window the answer is valid for (active_window_end, next_window_start).',
+    input_schema => {
+      type       => 'object',
+      properties => {
+        include_all => {
+          type        => 'boolean',
+          description => 'Also list the trials that are neither running nor coming (default: false)',
+          default     => 0,
+        },
+      },
+    },
+    code => sub {
+      my ($tool, $args) = @_;
+      return $self->_to_json($self->_weekly_trials_result(include_all => $args->{include_all}));
     },
   );
 
@@ -533,6 +795,15 @@ The distribution also includes C<mcp-arcraiders-http>, a combined HTTP server
 that provides both MCP protocol support and a REST API for integration with
 ChatGPT and other AI assistants.
 
+=head1 DATA SOURCE
+
+All game data comes from L<MetaForge|https://metaforge.app/arc-raiders>
+(L<https://metaforge.app/arc-raiders>) through L<WWW::MetaForge::ArcRaiders>.
+The MetaForge terms ask public projects to name the source with a link to
+that address; the server does so in its MCP server instructions and in the
+C<info> of the OpenAPI description, and so should every page or answer built
+on it.
+
 =attr api
 
 L<WWW::MetaForge::ArcRaiders> instance. Can be injected for testing.
@@ -543,7 +814,7 @@ L<WWW::MetaForge::Cache> instance with namespace C<mcp-arcraiders>.
 
 =attr json
 
-L<JSON::MaybeXS> instance for JSON encoding. Uses UTF-8 enabled, pretty printing, canonical ordering, and blessed conversion.
+L<JSON::MaybeXS> instance for JSON encoding. Pretty printing, canonical ordering and blessed conversion. It returns character strings (no C<utf8>): the MCP framework encodes the response to UTF-8 once.
 
 =attr server
 
@@ -579,7 +850,7 @@ B<REST:> C<GET /api/items?search=ferro&limit=10>
 
 =head2 get_item_details
 
-Get full details about an item including crafting components, recycle yield and sellers.
+Get full details about an item: crafting components, recycle yield, sellers, what it is used in, which items recycle into it, which ARCs drop it, its mods and where it is found.
 
 B<Parameters:>
 
@@ -593,7 +864,7 @@ B<REST:> C<GET /api/items/:name>
 
 =head2 get_arcs
 
-Get ARCs with their loot drops.
+Get ARCs with their loot drops and their data (variants, e.g. whether a variant flies).
 
 B<Parameters:>
 
@@ -607,17 +878,11 @@ B<REST:> C<GET /api/arcs>
 
 =head2 get_quests
 
-Get quest information, optionally filtered by type.
+Get all quests over all pages of the API, with description, objectives,
+requirements, rewards, additional rewards and the manifest (prerequisites and
+objective graph). The API has no quest type, so there is no type filter.
 
-B<Parameters:>
-
-=over
-
-=item * C<type> (string, enum: StoryQuest, SideQuest) - Filter by quest type
-
-=back
-
-B<REST:> C<GET /api/quests?type=SideQuest>
+B<REST:> C<GET /api/quests>
 
 =head2 get_traders
 
@@ -627,7 +892,8 @@ B<REST:> C<GET /api/traders>
 
 =head2 find_item_seller
 
-Find which traders sell a specific item.
+Find which traders sell a specific item, including Ermal's offers (with coin
+cost, offer period and the items he accepts as payment).
 
 B<Parameters:>
 
@@ -642,13 +908,21 @@ B<Parameters:>
 Get event schedules with active status and countdown timers.
 Data is cached and refreshes hourly.
 
-B<REST:> C<GET /api/events>
+B<Parameters:>
+
+=over
+
+=item * C<region> (string, enum: europe, north-america, oceania, east-asia, brazil, all; default: europe) - Server region of the schedule. With C<all> every event carries its region.
+
+=back
+
+B<REST:> C<GET /api/events?region=north-america>
 
 =head2 get_active_events
 
-Get only currently active events.
+Get only currently active events. Takes the same C<region> parameter.
 
-B<REST:> C<GET /api/events/active>
+B<REST:> C<GET /api/events/active?region=north-america>
 
 =head2 get_map_data
 
@@ -659,9 +933,9 @@ B<Parameters:>
 
 =over
 
-=item * C<map> (string, required) - Map name: dam, spaceport, buried-city, blue-gate, riven-tides, stella-montis
+=item * C<map> (string, required) - Map id as listed by C<list_maps>; the choices follow L<WWW::MetaForge::ArcRaiders/maps>, so a new map needs no change here
 
-=item * C<category> (string, required) - Category filter: arc, containers, locations, events
+=item * C<category> (string, required) - Category filter: arc, containers, locations, events, nature, quests
 
 =item * C<subcategory> (string, optional) - Subcategory filter (e.g., "tick", "extraction", "weapon_case")
 
@@ -680,6 +954,10 @@ B<Categories and subcategories:>
 =item * B<locations> - Points of interest: player_spawn, field_depot, supply_station, raider_camp, extraction, locked_room, hatch
 
 =item * B<events> - Dynamic events: harvester
+
+=item * B<nature> - Gatherable plants (e.g. candleberries)
+
+=item * B<quests> - Quest locations (the subcategory is the quest id)
 
 =back
 
@@ -722,6 +1000,49 @@ B<Example:>
 
   POST /api/requirements
   {"items": [{"item": "Advanced Medkit", "count": 5}], "base_only": true}
+
+=head2 get_ermal
+
+Get Ermal: this week's offers (item, coin cost, offer period and the items he
+accepts as payment) and his permanent services (Expedition Vault, Stash
+Expansion).
+
+B<REST:> C<GET /api/ermal>
+
+=head2 get_hideout
+
+Get the hideout stations with their upgrade levels: for each level the items
+it needs (item id and quantity), the unlock requirements and the crafts it
+opens.
+
+B<Parameters:>
+
+=over
+
+=item * C<station> (string, optional) - Station id or name (C<weapon-bench>, C<Gunsmith>); all stations when left out
+
+=item * C<level> (integer, optional) - Only this upgrade level
+
+=back
+
+B<REST:> C<GET /api/hideout?station=weapon-bench&level=2>
+
+=head2 get_weekly_trials
+
+Get the weekly trials running now and the coming ones, with the time window
+the answer is valid for: C<window.active_window_end> and
+C<window.next_window_start>. The list is cached and refreshes when the first
+of the two boundaries has passed.
+
+B<Parameters:>
+
+=over
+
+=item * C<include_all> (boolean, default: false) - Also list the trials that are neither running nor coming
+
+=back
+
+B<REST:> C<GET /api/weekly-trials?include_all=1>
 
 =head1 CHATGPT INTEGRATION
 
@@ -776,6 +1097,6 @@ Or for the HTTP variant:
 
 L<MCP>, L<MCP::Server>, L<WWW::MetaForge::ArcRaiders>
 
-MetaForge API: L<https://metaforge.app>
+Game data: L<MetaForge|https://metaforge.app/arc-raiders>, L<https://metaforge.app/arc-raiders>
 
 =cut
