@@ -16,7 +16,7 @@ sub data { return ArcTest::decode(ArcTest::call($mcp, @_)) }
 subtest 'the tool list' => sub {
   my %tools = map { $_->name => $_ } @{ $mcp->server->tools };
   ok($tools{$_}, "$_ is registered") for qw(
-    search_items get_item_details get_arcs get_quests get_traders find_item_seller
+    search_items get_item_details get_arcs get_quests get_quest_details get_traders find_item_seller
     get_event_timers get_active_events get_map_data list_maps calculate_requirements
     get_ermal get_hideout get_weekly_trials
   );

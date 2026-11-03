@@ -142,16 +142,44 @@ subtest 'get_quests tool' => sub {
   is(scalar(keys %{ { map { $_->{id} => 1 } @$data } }), 123, 'no quest twice');
 
   my $quest = $data->[0];
+  is_deeply([ sort keys %$quest ], [qw(id name required_items rewards trader_name xp)], 'the overview carries the short form');
   ok($quest->{name}, 'quest has name');
   ok(exists $quest->{trader_name}, 'quest has trader_name');
   ok(exists $quest->{xp}, 'quest has xp');
-  ok(ref $quest->{rewards} eq 'ARRAY', 'quest rewards is a list');
-  ok(exists $quest->{description}, 'quest has description');
-  ok(ref $quest->{additional_rewards} eq 'ARRAY', 'quest has additional_rewards');
-  ok(ref $quest->{manifest} eq 'HASH' && exists $quest->{manifest}{prerequisites}, 'quest has the manifest');
+  like($quest->{rewards}, qr/^\d+$/, 'the rewards are counted');
 
   my $schema = ArcTest::tool($mcp, 'get_quests')->input_schema;
   ok(!exists $schema->{properties}{type}, 'the type filter is gone: the API has no quest type');
+  is_deeply([ sort keys %{ $schema->{properties} } ], [qw(name trader)], 'trader and name narrow it');
+
+  my $full = $mcp->_to_json([ map { $mcp->_quest_to_hash($_) } @{ $mcp->_all_quests } ]);
+  cmp_ok(length $result, '<', 0.1 * length $full, 'the overview is far smaller than the full form of all quests');
+};
+
+subtest 'get_quests filters' => sub {
+  my $celeste = $json->decode(ArcTest::call($mcp, 'get_quests', { trader => 'celeste' }));
+  is(scalar @$celeste, 32, 'by trader, case-insensitive');
+  ok((!grep { $_->{trader_name} ne 'Celeste' } @$celeste), 'only his quests');
+  my $named = $json->decode(ArcTest::call($mcp, 'get_quests', { name => 'JOURNALS' }));
+  is_deeply([ map { $_->{id} } @$named ], ['celestes-journals'], 'by name part, case-insensitive');
+  my $both = $json->decode(ArcTest::call($mcp, 'get_quests', { trader => 'Celeste', name => 'celeste' }));
+  is(scalar @$both, 2, 'both together');
+  is(ArcTest::call($mcp, 'get_quests', { trader => 'Nobody' }), 'No quests found', 'a plain sentence when none matches');
+};
+
+subtest 'get_quest_details tool' => sub {
+  my $quest = $json->decode(ArcTest::call($mcp, 'get_quest_details', { quest => 'a-bad-feeling' }));
+  is($quest->{name}, 'A Bad Feeling', 'by id');
+  like($quest->{description}, qr/ARC's behavior/, 'description');
+  is(scalar @{ $quest->{objectives} }, 1, 'objectives');
+  is(scalar @{ $quest->{rewards} }, 3, 'rewards');
+  ok(ref $quest->{required_items} eq 'ARRAY', 'required items');
+  is_deeply($quest->{additional_rewards}, [{ kind => 'currency', name => 'XP', quantity => 5000 }], 'additional rewards');
+  ok(exists $quest->{manifest}{prerequisites}, 'the manifest');
+  my $by_name = $json->decode(ArcTest::call($mcp, 'get_quest_details', { quest => 'a bad FEELING' }));
+  is($by_name->{id}, 'a-bad-feeling', 'by name, case-insensitive');
+  is(ArcTest::call($mcp, 'get_quest_details', { quest => 'nope' }), "No quest found matching 'nope'", 'unknown quest');
+  ok(ArcTest::tool($mcp, 'get_quest_details')->validate_input({}), 'quest is required');
 };
 
 subtest 'get_arcs tool' => sub {

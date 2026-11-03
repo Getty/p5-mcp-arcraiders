@@ -98,8 +98,10 @@ subtest 'get_arcs' => sub {
 subtest 'get_quests' => sub {
   my $data = tool_ok('get_quests', {}, 200);
   ok(ref $data eq 'ARRAY' && @$data > 40, 'more than page 1') or return;
-  ok($data->[0]{manifest}, 'with the manifest');
+  ok(!exists $data->[0]{manifest}, 'as the overview');
   diag(scalar(@$data) . ' quests');
+  my $one = tool_ok('get_quest_details', { quest => $data->[0]{id} });
+  ok(ref $one eq 'HASH' && $one->{manifest}, 'one quest in full, with the manifest');
 };
 
 my @sellable;

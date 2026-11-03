@@ -28,7 +28,8 @@ get '/' => sub ($c) {
         items         => 'GET /api/items?search=&limit=',
         item          => 'GET /api/items/:name',
         arcs          => 'GET /api/arcs',
-        quests        => 'GET /api/quests',
+        quests        => 'GET /api/quests?trader=&name=',
+        quest         => 'GET /api/quests/:quest',
         traders       => 'GET /api/traders',
         ermal         => 'GET /api/ermal',
         hideout       => 'GET /api/hideout?station=&level=',
@@ -95,8 +96,22 @@ get '/openapi.json' => sub ($c) {
       '/api/quests' => {
         get => {
           operationId => 'getQuests',
-          summary     => 'Get all quests with description, objectives, rewards and manifest',
-          responses   => { 200 => { description => 'List of quests' } },
+          summary     => 'Get an overview of all quests: id, name, trader, XP, number of required items and rewards',
+          parameters  => [
+            { name => 'trader', in => 'query', schema => { type => 'string' }, description => 'Only this trader\'s quests (exact name)' },
+            { name => 'name', in => 'query', schema => { type => 'string' }, description => 'Only quests whose name contains this text' },
+          ],
+          responses => { 200 => { description => 'List of quest summaries' } },
+        },
+      },
+      '/api/quests/{quest}' => {
+        get => {
+          operationId => 'getQuestDetails',
+          summary     => 'Get one quest in full: description, objectives, items, rewards and manifest',
+          parameters  => [
+            { name => 'quest', in => 'path', required => \1, schema => { type => 'string' }, description => 'Quest id or exact name' },
+          ],
+          responses => { 200 => { description => 'The quest' } },
         },
       },
       '/api/traders' => {
@@ -227,7 +242,13 @@ get '/api/arcs' => sub ($c) {
 };
 
 get '/api/quests' => sub ($c) {
-  $c->render(json => [ map { _quest_hash($_) } @{ $mcp->_all_quests } ]);
+  $c->render(json => $mcp->_quest_overview(trader => $c->param('trader'), name => $c->param('name')));
+};
+
+get '/api/quests/:quest' => sub ($c) {
+  my $quest = $mcp->_quest_details($c->param('quest'));
+  return $c->render(json => { error => 'Not found' }, status => 404) unless $quest;
+  $c->render(json => $quest);
 };
 
 get '/api/traders' => sub ($c) {
@@ -323,7 +344,6 @@ post '/api/requirements' => sub ($c) {
 sub _item_hash ($item)    { $mcp->_item_to_hash($item) }
 sub _item_detail ($item)  { $mcp->_item_details_to_hash($item) }
 sub _arc_hash ($arc)      { $mcp->_arc_to_hash($arc) }
-sub _quest_hash ($quest)  { $mcp->_quest_to_hash($quest) }
 sub _trader_hash ($trader) { $mcp->_trader_to_hash($trader) }
 sub _event_hash ($event)  { $mcp->_event_to_hash($event) }
 sub _marker_hash ($marker) { $mcp->_marker_to_hash($marker) }

@@ -60,7 +60,7 @@ subtest 'every MCP tool has its REST route and OpenAPI path' => sub {
   # find_item_seller has no REST route (it never had one)
   my %route_of = (
     search_items => '/api/items', get_item_details => '/api/items/{name}',
-    get_arcs => '/api/arcs', get_quests => '/api/quests', get_traders => '/api/traders',
+    get_arcs => '/api/arcs', get_quests => '/api/quests', get_quest_details => '/api/quests/{quest}', get_traders => '/api/traders',
     get_event_timers => '/api/events', get_active_events => '/api/events/active',
     get_map_data => '/api/maps/{map}', list_maps => '/api/maps',
     calculate_requirements => '/api/requirements',
@@ -84,6 +84,8 @@ subtest 'REST answers like the tools' => sub {
     [ '/api/arcs'                            => 'get_arcs',           {} ],
     [ '/api/traders'                         => 'get_traders',        {} ],
     [ '/api/quests'                          => 'get_quests',         {} ],
+    [ '/api/quests?trader=Celeste&name=journals' => 'get_quests',     { trader => 'Celeste', name => 'journals' } ],
+    [ '/api/quests/a-bad-feeling'            => 'get_quest_details',  { quest => 'a-bad-feeling' } ],
     [ '/api/items/Adrenaline%20Shot'         => 'get_item_details',   { name => 'Adrenaline Shot' } ],
     [ '/api/maps/pendola-pass?category=arc'  => 'get_map_data',       { map => 'pendola-pass', category => 'arc' } ],
   ) {
@@ -96,7 +98,9 @@ subtest 'REST answers like the tools' => sub {
 subtest 'REST: quests over all pages' => sub {
   $t->get_ok('/api/quests')->status_is(200);
   is(scalar @{ $t->tx->res->json }, 123, '123 quests');
-  ok(exists $t->tx->res->json->[0]{manifest}, 'with the manifest');
+  ok(!exists $t->tx->res->json->[0]{manifest}, 'as the short overview');
+  $t->get_ok('/api/quests/a-bad-feeling')->status_is(200)->json_has('/manifest');
+  $t->get_ok('/api/quests/nope')->status_is(404);
 };
 
 subtest 'REST: events by region' => sub {

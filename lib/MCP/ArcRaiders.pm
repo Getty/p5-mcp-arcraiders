@@ -149,6 +149,19 @@ sub _quest_to_hash {
   };
 }
 
+# The short form of a quest for the overview
+sub _quest_summary_to_hash {
+  my ($self, $quest) = @_;
+  return {
+    id             => $quest->id,
+    name           => $quest->name,
+    trader_name    => $quest->trader_name,
+    xp             => $quest->xp,
+    required_items => scalar @{ $quest->required_items },
+    rewards        => scalar @{ $quest->rewards },
+  };
+}
+
 sub _trader_to_hash {
   my ($self, $trader) = @_;
   return {
@@ -321,6 +334,28 @@ sub _all_quests {
   return $self->api->quests_all;
 }
 
+# Shared: the quest overview, narrowed by trader (exact) and name (substring)
+sub _quest_overview {
+  my ($self, %args) = @_;
+  my @quests = @{ $self->_all_quests };
+  if (defined $args{trader} && length $args{trader}) {
+    @quests = grep { lc($_->trader_name // '') eq lc $args{trader} } @quests;
+  }
+  if (defined $args{name} && length $args{name}) {
+    @quests = grep { index(lc $_->name, lc $args{name}) >= 0 } @quests;
+  }
+  return [ map { $self->_quest_summary_to_hash($_) } @quests ];
+}
+
+# Shared: the full quest by id or exact name (case-insensitive)
+sub _quest_details {
+  my ($self, $wanted) = @_;
+  return unless defined $wanted && length $wanted;
+  my $lc = lc $wanted;
+  my ($quest) = grep { lc $_->id eq $lc || lc $_->name eq $lc } @{ $self->_all_quests };
+  return $quest ? $self->_quest_to_hash($quest) : undef;
+}
+
 # Shared: the markers of one category, narrowed by subcategory and search term
 sub _filter_markers {
   my ($self, $markers, %args) = @_;
@@ -481,16 +516,49 @@ sub _build_server {
   # Tool: get_quests
   $server->tool(
     name        => 'get_quests',
-    description => 'Get all quests (every page of the API) with description, objectives, requirements, rewards and the manifest with prerequisites and objective graph.',
+    description => 'Get an overview of all quests (every page of the API): id, name, trader, XP and the number of required items and rewards. Narrow it by trader or name; use get_quest_details for one quest in full.',
     input_schema => {
       type       => 'object',
-      properties => {},
+      properties => {
+        trader => {
+          type        => 'string',
+          description => 'Only the quests of this trader (exact name, case-insensitive)',
+        },
+        name => {
+          type        => 'string',
+          description => 'Only the quests whose name contains this text (case-insensitive)',
+        },
+      },
     },
     code => sub {
       my ($tool, $args) = @_;
-      my $quests = $self->_all_quests;
-      my @results = map { $self->_quest_to_hash($_) } @$quests;
-      return $self->_to_json(\@results);
+      my $quests = $self->_quest_overview(%$args{qw(trader name)});
+
+      return "No quests found" unless @$quests;
+      return $self->_to_json($quests);
+    },
+  );
+
+  # Tool: get_quest_details
+  $server->tool(
+    name        => 'get_quest_details',
+    description => 'Get one quest in full: description, objectives, required items, all rewards and the manifest with prerequisites and objective graph.',
+    input_schema => {
+      type       => 'object',
+      properties => {
+        quest => {
+          type        => 'string',
+          description => 'Quest id or exact name (case-insensitive), e.g. "a-bad-feeling" or "A Bad Feeling"',
+        },
+      },
+      required => ['quest'],
+    },
+    code => sub {
+      my ($tool, $args) = @_;
+      my $quest = $self->_quest_details($args->{quest});
+
+      return "No quest found matching '$args->{quest}'" unless $quest;
+      return $self->_to_json($quest);
     },
   );
 
@@ -878,11 +946,36 @@ B<REST:> C<GET /api/arcs>
 
 =head2 get_quests
 
-Get all quests over all pages of the API, with description, objectives,
-requirements, rewards, additional rewards and the manifest (prerequisites and
-objective graph). The API has no quest type, so there is no type filter.
+Get an overview of all quests over all pages of the API: id, name, trader,
+XP and the number of required items and rewards. The API has no quest type,
+so there is no type filter.
 
-B<REST:> C<GET /api/quests>
+B<Parameters:>
+
+=over
+
+=item * C<trader> (string, optional) - Only this trader's quests (exact name, case-insensitive)
+
+=item * C<name> (string, optional) - Only quests whose name contains this text (case-insensitive)
+
+=back
+
+B<REST:> C<GET /api/quests?trader=Celeste&name=journals>
+
+=head2 get_quest_details
+
+Get one quest in full: description, objectives, required items, all rewards,
+additional rewards and the manifest (prerequisites and objective graph).
+
+B<Parameters:>
+
+=over
+
+=item * C<quest> (string, required) - Quest id or exact name (case-insensitive)
+
+=back
+
+B<REST:> C<GET /api/quests/:quest>
 
 =head2 get_traders
 
