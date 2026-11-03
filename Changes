@@ -1,6 +1,35 @@
 Revision history for MCP-ArcRaiders
 
 {{$NEXT}}
+  - New tools get_ermal (offers and permanent services), get_hideout (stations
+    and what each level needs, optionally one station or level) and
+    get_weekly_trials (running and coming trials with their time window), each
+    with its REST route and OpenAPI path
+  - Pendola Pass is selectable: the map choices of get_map_data follow
+    WWW::MetaForge::ArcRaiders->maps in the MCP tool and in the OpenAPI
+    description; the categories nature and quests are selectable too
+  - get_event_timers and get_active_events take a region (europe,
+    north-america, oceania, east-asia, brazil or all); events carry their region
+  - get_item_details also returns what recycles into an item, which ARCs drop
+    it, its mods and locations, flavor text, subcategory, ammo and shield type;
+    get_arcs returns the ARC data with its variants; get_quests returns
+    description, additional rewards and the manifest; map markers carry
+    community, source_id and route_id
+  - get_quests returns all quests over all pages; the quest type filter is gone
+    because the API has no quest type
+  - find_item_seller also finds the items Ermal offers, with coin cost, offer
+    period and accepted items
+  - The trader answer, with Ermal's offers, is cached for an hour
+  - The tools hand over characters and the MCP framework encodes the response to
+    UTF-8 once; names with a typographic apostrophe reach the
+    client intact
+  - The server names MetaForge (https://metaforge.app/arc-raiders) as the source of
+    the data in its MCP instructions, the OpenAPI description, the info page,
+    README and POD
+  - The REST routes answer with the same shapers as the MCP tools
+  - The offline suite runs on live copies of the MetaForge responses and never
+    touches the network; USE_LIVE_API=1 prove -lv t/live.t runs every tool once
+    against the real API
   - The tools return the item, ARC, quest, trader and event fields of
     WWW::MetaForge 0.003: items carry item_type, value, stat_block,
     workbench, components, recycle_components and sold_by; ARCs carry

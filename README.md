@@ -21,9 +21,17 @@ app->start;
 
 MCP::ArcRaiders wraps [WWW::MetaForge::ArcRaiders](https://metacpan.org/pod/WWW::MetaForge::ArcRaiders)
 in [MCP::Server](https://metacpan.org/pod/MCP::Server) tools. It holds no game
-data of its own: items, ARCs, quests, traders, event timers and map markers all
-come from the MetaForge API. Responses are JSON strings; an empty result is a
-plain sentence.
+data of its own: items, ARCs, quests, traders, Ermal, the hideout, weekly trials,
+event timers and map markers all come from the MetaForge API. Responses are JSON
+strings; an empty result is a plain sentence.
+
+## Data source
+
+All game data comes from [MetaForge](https://metaforge.app/arc-raiders)
+(<https://metaforge.app/arc-raiders>). The MetaForge terms ask public projects to
+name the source with a link to that address. The server does so in its MCP
+instructions and in the `info` of its OpenAPI description; name MetaForge wherever
+you show its data.
 
 The distribution ships two executables:
 
@@ -36,13 +44,16 @@ The distribution ships two executables:
 | Tool | REST route | Purpose |
 |---|---|---|
 | `search_items` | `GET /api/items` | search items by `search`, limited by `limit` |
-| `get_item_details` | `GET /api/items/:name` | full details of an item by name |
+| `get_item_details` | `GET /api/items/:name` | full details of an item by name: components, recycling both ways, sellers, usage, ARC drops, mods, locations |
 | `get_arcs` | `GET /api/arcs` | ARC enemies, optionally with loot |
-| `get_quests` | `GET /api/quests` | quests, filterable by `type` |
+| `get_quests` | `GET /api/quests` | all quests (every page) with rewards and manifest |
 | `get_traders` | `GET /api/traders` | traders and their inventories |
-| `find_item_seller` | - | which trader sells an item |
-| `get_event_timers` | `GET /api/events` | scheduled events |
-| `get_active_events` | `GET /api/events/active` | events running now |
+| `find_item_seller` | - | which trader or Ermal offer sells an item |
+| `get_ermal` | `GET /api/ermal` | Ermal's offers and permanent services |
+| `get_hideout` | `GET /api/hideout` | hideout stations, what each level needs; `station`, `level` |
+| `get_weekly_trials` | `GET /api/weekly-trials` | running and coming weekly trials with their window |
+| `get_event_timers` | `GET /api/events` | scheduled events; `region` |
+| `get_active_events` | `GET /api/events/active` | events running now; `region` |
 | `get_map_data` | `GET /api/maps/:map` | map markers by `category`, `subcategory`, `search` |
 | `list_maps` | `GET /api/maps` | available maps with display names |
 | `calculate_requirements` | `POST /api/requirements` | crafting materials for a list of items |
@@ -98,9 +109,12 @@ cpanm MCP::ArcRaiders
 ## Testing
 
 ```bash
-prove -lr t/                  # mocked API fixtures
-USE_LIVE_API=1 prove -lr t/   # real MetaForge API
+prove -lr t/                           # mocked API fixtures, no network
+USE_LIVE_API=1 prove -lv t/live.t      # every tool once against the real MetaForge API
 ```
+
+The fixtures in `t/fixtures` are copies of live MetaForge responses (the two map
+files hold a verbatim excerpt of the markers).
 
 ## License
 
