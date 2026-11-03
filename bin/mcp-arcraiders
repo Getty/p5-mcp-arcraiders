@@ -2,6 +2,8 @@
 # PODNAME: mcp-arcraiders
 # ABSTRACT: MCP server for ARC Raiders game data
 
+our $VERSION = '0.001';
+
 use strict;
 use warnings;
 use MCP::ArcRaiders;
