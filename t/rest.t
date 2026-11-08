@@ -28,6 +28,7 @@ subtest 'the info page names the source and the routes' => sub {
   $t->get_ok('/')->status_is(200)
     ->json_is('/source/name', 'MetaForge')
     ->json_is('/source/url', 'https://metaforge.app/arc-raiders')
+    ->json_has('/endpoints/rest/item_sellers')
     ->json_has('/endpoints/rest/ermal')
     ->json_has('/endpoints/rest/hideout')
     ->json_has('/endpoints/rest/weekly_trials');
@@ -57,10 +58,10 @@ subtest 'the OpenAPI description' => sub {
 };
 
 subtest 'every MCP tool has its REST route and OpenAPI path' => sub {
-  # find_item_seller has no REST route (it never had one)
   my %route_of = (
     search_items => '/api/items', get_item_details => '/api/items/{name}',
     get_arcs => '/api/arcs', get_quests => '/api/quests', get_quest_details => '/api/quests/{quest}', get_traders => '/api/traders',
+    find_item_seller => '/api/items/{name}/sellers',
     get_event_timers => '/api/events', get_active_events => '/api/events/active',
     get_map_data => '/api/maps/{map}', list_maps => '/api/maps',
     calculate_requirements => '/api/requirements',
@@ -68,7 +69,6 @@ subtest 'every MCP tool has its REST route and OpenAPI path' => sub {
   );
   my $spec = $t->get_ok('/openapi.json')->tx->res->json;
   my %tools = map { $_->name => 1 } @{ ArcTest::mcp()->server->tools };
-  delete $tools{find_item_seller};
   is_deeply([ sort keys %tools ], [ sort keys %route_of ], 'the table covers every tool');
   ok($spec->{paths}{$route_of{$_}}, "$_ has an OpenAPI path $route_of{$_}") for sort keys %route_of;
 };
@@ -83,6 +83,8 @@ subtest 'REST answers like the tools' => sub {
     [ '/api/weekly-trials?include_all=1'     => 'get_weekly_trials',  { include_all => 1 } ],
     [ '/api/arcs'                            => 'get_arcs',           {} ],
     [ '/api/traders'                         => 'get_traders',        {} ],
+    [ '/api/items/Adrenaline%20Shot/sellers' => 'find_item_seller',   { item_name => 'Adrenaline Shot' } ],
+    [ '/api/items/Anvil%20II/sellers'        => 'find_item_seller',   { item_name => 'Anvil II' } ],
     [ '/api/quests'                          => 'get_quests',         {} ],
     [ '/api/quests?trader=Celeste&name=journals' => 'get_quests',     { trader => 'Celeste', name => 'journals' } ],
     [ '/api/quests/a-bad-feeling'            => 'get_quest_details',  { quest => 'a-bad-feeling' } ],
@@ -109,6 +111,10 @@ subtest 'REST: events by region' => sub {
   ok(exists $t->tx->res->json->[0]{region}, 'with a region field');
   $t->get_ok('/api/events/active?region=mars')->status_is(400)->json_like('/error', qr/region must be one of/);
   $t->get_ok('/api/events?region=mars')->status_is(400);
+};
+
+subtest 'REST: item sellers' => sub {
+  $t->get_ok('/api/items/Nothing%20At%20All/sellers')->status_is(404)->json_has('/error');
 };
 
 subtest 'REST: hideout errors' => sub {

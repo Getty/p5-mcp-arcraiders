@@ -31,6 +31,7 @@ get '/' => sub ($c) {
         quests        => 'GET /api/quests?trader=&name=',
         quest         => 'GET /api/quests/:quest',
         traders       => 'GET /api/traders',
+        item_sellers  => 'GET /api/items/:name/sellers',
         ermal         => 'GET /api/ermal',
         hideout       => 'GET /api/hideout?station=&level=',
         weekly_trials => 'GET /api/weekly-trials?include_all=',
@@ -119,6 +120,16 @@ get '/openapi.json' => sub ($c) {
           operationId => 'getTraders',
           summary     => 'Get traders and their inventory',
           responses   => { 200 => { description => 'List of traders' } },
+        },
+      },
+      '/api/items/{name}/sellers' => {
+        get => {
+          operationId => 'findItemSeller',
+          summary     => 'Find which traders (and which of Ermal\'s offers) sell an item, by exact name',
+          parameters  => [
+            { name => 'name', in => 'path', required => \1, schema => { type => 'string' }, description => 'Exact item name' },
+          ],
+          responses => { 200 => { description => 'The sellers of the item' }, 404 => { description => 'Nobody sells the item' } },
         },
       },
       '/api/ermal' => {
@@ -254,6 +265,13 @@ get '/api/quests/:quest' => sub ($c) {
 get '/api/traders' => sub ($c) {
   my $traders = $api->traders;
   $c->render(json => [ map { _trader_hash($_) } @$traders ]);
+};
+
+get '/api/items/:name/sellers' => sub ($c) {
+  my $sellers = $mcp->_item_sellers($c->param('name'));
+  return $c->render(json => { error => 'No traders found selling this item' }, status => 404) unless @$sellers;
+  # The same encoder as the tool: the sellers hold upstream objects
+  $c->render(data => $mcp->_to_json($sellers), format => 'json');
 };
 
 get '/api/ermal' => sub ($c) {

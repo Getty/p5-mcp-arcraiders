@@ -988,6 +988,8 @@ B<REST:> C<GET /api/traders>
 Find which traders sell a specific item, including Ermal's offers (with coin
 cost, offer period and the items he accepts as payment).
 
+B<REST:> C<GET /api/items/:name/sellers>
+
 B<Parameters:>
 
 =over

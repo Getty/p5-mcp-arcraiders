@@ -18,10 +18,10 @@ Revision history for MCP-ArcRaiders
   - get_quests returns a short overview of all quests over all pages (id, name,
     trader, XP, number of required items and rewards), narrowed by trader or
     name; the new get_quest_details returns one quest by id or name in full,
-    with description, objectives, rewards and manifest; the quest type filter
-    is gone because the API has no quest type
+    with description, objectives, rewards and manifest
   - find_item_seller also finds the items Ermal offers, with coin cost, offer
-    period and accepted items
+    period and accepted items, and has its REST route
+    (GET /api/items/:name/sellers) and OpenAPI path
   - The trader answer, with Ermal's offers, is cached for an hour
   - The tools hand over characters and the MCP framework encodes the response to
     UTF-8 once; names with a typographic apostrophe reach the

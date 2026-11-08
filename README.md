@@ -48,7 +48,7 @@ The distribution ships two executables:
 | `get_arcs` | `GET /api/arcs` | ARC enemies, optionally with loot |
 | `get_quests` | `GET /api/quests` | all quests (every page) with rewards and manifest |
 | `get_traders` | `GET /api/traders` | traders and their inventories |
-| `find_item_seller` | - | which trader or Ermal offer sells an item |
+| `find_item_seller` | `GET /api/items/:name/sellers` | which trader or Ermal offer sells an item |
 | `get_ermal` | `GET /api/ermal` | Ermal's offers and permanent services |
 | `get_hideout` | `GET /api/hideout` | hideout stations, what each level needs; `station`, `level` |
 | `get_weekly_trials` | `GET /api/weekly-trials` | running and coming weekly trials with their window |
