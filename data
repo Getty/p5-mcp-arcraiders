@@ -1,0 +1,30 @@
+---
+class: standard
+created: 2026-11-10T03:00:30Z
+id: 8
+priority: high
+status: todo
+tags:
+- ci
+title: 'CI red on main: installing WWW::MetaForge from the sibling checkout fails'
+updated: 2026-11-10T03:00:30Z
+---
+
+The `ci` workflow on `main` is red at 91abd88 on perl 5.36, 5.38 and 5.40, in the step "Install WWW::MetaForge from the sibling repository". Run: `gh run view 42434996574 -R Getty/p5-mcp-arcraiders --log-failed`.
+
+    Configuring WWW-MetaForge-0.003 ... OK
+    Building and testing WWW-MetaForge-0.003 ... FAIL
+    [DZ] error running {{["cpanm", "."]}}
+
+The step checks `p5-www-metaforge` out into `vendor/` and runs `dzil install` there; WWW::MetaForge's own tests fail inside this job. The `ci` workflow of `Getty/p5-www-metaforge` itself is green (2026-11-08), so the difference is in this job's environment: the prerequisites installed here, or network access its tests expect.
+
+## Steps
+
+1. Get the reason: add `cat ~/.cpanm/work/*/build.log` on failure to the step (or reproduce in `perl:5.40` with the same commands as the workflow) and read which test of WWW::MetaForge fails.
+2. Fix where it belongs: a missing prerequisite in this workflow's install step, or a test in `p5-www-metaforge` that needs something only its own CI provides (then file the card there and name it here).
+
+Related, not the same: the open card about `_item_to_hash` calling accessors `Result::Item` no longer has.
+
+## Proof
+
+The next `ci` run on `main` is green on all three perls.
