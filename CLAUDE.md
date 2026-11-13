@@ -7,7 +7,7 @@ game data of its own — everything comes from `WWW::MetaForge::ArcRaiders`
 ## Delegation
 
 Delegate behavior-relevant code to the right agent instead of touching it
-yourself — principle in the shared rule `getty-agent-delegation` (skilletor bundle
+yourself — principle in the shared rule `agent-delegation` (skilletor bundle
 `getty-cpan-dist@getty`), lanes and hazards in `.claude/rules/mcp-arcraiders-rules.md`.
 
 | Task | Agent |
